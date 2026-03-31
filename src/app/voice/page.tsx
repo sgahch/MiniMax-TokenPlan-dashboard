@@ -1,10 +1,12 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useCallback, useState } from "react";
 import { useSettingsStore } from "@/store/useSettingsStore";
-import { useTasksStore } from "@/store/useTasksStore";
+import { Task, useTasksStore } from "@/store/useTasksStore";
 import { appConfig } from "@/config/appConfig";
 import { Mic, Loader2, PlayCircle, Clock, AlertCircle, CheckCircle2, ChevronDown, ChevronUp } from "lucide-react";
+import { ApiError, apiRequest } from "@/lib/apiClient";
+import { resolveFileDownloadUrl, useTaskPolling } from "@/lib/taskPolling";
 
 export default function VoicePage() {
   const { apiKey } = useSettingsStore();
@@ -24,76 +26,50 @@ export default function VoicePage() {
 
   const voiceTasks = tasks.filter(t => t.type === 'voice');
 
-  // 轮询未完成的任务
-  const pollingRef = useRef<NodeJS.Timeout | null>(null);
+  const autoExpand = useCallback((id: string) => {
+    setExpandedTasks((prev) => ({ ...prev, [id]: true }));
+  }, []);
 
-  useEffect(() => {
-    const pollTasks = async () => {
-      if (!apiKey) return;
+  const queryVoiceTask = useCallback(async (task: Task, key: string): Promise<Partial<Task>> => {
+    const queryData = await apiRequest<{
+      status?: string | number;
+      task_status?: string | number;
+      file_id?: string;
+      data?: { file_id?: string };
+      task_info?: { file_id?: string };
+      error_message?: string;
+    }>({
+      path: `/query/t2a_async_query_v2?task_id=${encodeURIComponent(task.id)}`,
+      apiKey: key,
+    });
 
-      const pendingTasks = tasks.filter(t => t.type === 'voice' && (t.status === 'Processing' || t.status === 'Queuing'));
-
-      if (pendingTasks.length === 0) {
-        if (pollingRef.current) clearTimeout(pollingRef.current);
-        return;
+    const taskStatus = queryData.status || queryData.task_status;
+    if (taskStatus === "Success" || taskStatus === 2) {
+      const fileId = queryData.file_id || queryData.data?.file_id || queryData.task_info?.file_id;
+      if (!fileId) {
+        return { status: "Fail" as const, errorMessage: "任务完成但未返回文件 ID" };
       }
-
-      for (const task of pendingTasks) {
-        try {
-          const queryRes = await fetch(`${appConfig.apiBaseUrl}/query/t2a_async_query_v2?task_id=${task.id}`, {
-            headers: {
-              "Authorization": `Bearer ${apiKey}`,
-            },
-          });
-          const queryData = await queryRes.json();
-
-          const taskStatus = queryData.status || queryData.task_status;
-
-          if (taskStatus === "Success" || taskStatus === 2) {
-            const fileId = queryData.file_id || queryData.data?.file_id || queryData.task_info?.file_id;
-
-            if (fileId) {
-              const fileRes = await fetch(`${appConfig.apiBaseUrl}/files/retrieve?file_id=${fileId}`, {
-                headers: { "Authorization": `Bearer ${apiKey}` },
-              });
-              const fileData = await fileRes.json();
-
-              if (fileData.file?.download_url) {
-                updateTask(task.id, {
-                  status: 'Success',
-                  resultUrl: fileData.file.download_url
-                });
-                // 自动展开刚完成的任务
-                setExpandedTasks(prev => ({ ...prev, [task.id]: true }));
-              } else {
-                updateTask(task.id, {
-                  status: 'Fail',
-                  errorMessage: '无法获取音频下载链接'
-                });
-              }
-            }
-          } else if (taskStatus === "Fail" || taskStatus === 3) {
-            updateTask(task.id, {
-              status: 'Fail',
-              errorMessage: queryData.error_message || "未知错误"
-            });
-          } else {
-            updateTask(task.id, { status: 'Processing' });
-          }
-        } catch (e) {
-          console.error("Polling error:", e);
-        }
+      const downloadUrl = await resolveFileDownloadUrl(fileId, key);
+      if (!downloadUrl) {
+        return { status: "Fail" as const, errorMessage: "无法获取音频下载链接" };
       }
+      return { status: "Success" as const, resultUrl: downloadUrl };
+    }
+    if (taskStatus === "Fail" || taskStatus === 3) {
+      return { status: "Fail" as const, errorMessage: queryData.error_message || "未知错误" };
+    }
+    return { status: "Processing" as const };
+  }, []);
 
-      pollingRef.current = setTimeout(pollTasks, 3000);
-    };
-
-    pollTasks();
-
-    return () => {
-      if (pollingRef.current) clearTimeout(pollingRef.current);
-    };
-  }, [tasks, apiKey, updateTask]);
+  useTaskPolling({
+    apiKey,
+    tasks,
+    type: "voice",
+    intervalMs: 3000,
+    queryTask: queryVoiceTask,
+    updateTask,
+    autoExpand,
+  });
 
   const handleGenerate = async () => {
     if (!text.trim() || !apiKey) return;
@@ -102,13 +78,11 @@ export default function VoicePage() {
     setErrorMsg("");
 
     try {
-      const createRes = await fetch(`${appConfig.apiBaseUrl}/t2a_async_v2`, {
+      const createData = await apiRequest<{ task_id: string }>({
+        path: "/t2a_async_v2",
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify({
+        apiKey,
+        body: {
           model: appConfig.models.voiceModel,
           text: text,
           voice_setting: {
@@ -123,13 +97,8 @@ export default function VoicePage() {
             format: appConfig.audio.voice.format,
             channel: appConfig.audio.voice.channel
           }
-        }),
+        },
       });
-
-      const createData = await createRes.json();
-      if (!createRes.ok || (createData.base_resp && createData.base_resp.status_code !== 0)) {
-        throw new Error(createData.base_resp?.status_msg || createData.error?.message || "创建任务失败");
-      }
 
       addTask({
         id: createData.task_id,
@@ -142,7 +111,7 @@ export default function VoicePage() {
       setText("");
 
     } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : "未知错误";
+      const errorMessage = error instanceof ApiError ? error.message : error instanceof Error ? error.message : "未知错误";
       setErrorMsg(errorMessage);
     } finally {
       setIsSubmitting(false);
@@ -150,7 +119,7 @@ export default function VoicePage() {
   };
 
   return (
-    <div className="flex flex-col h-full bg-white dark:bg-zinc-950 p-6 md:p-8 overflow-y-auto">
+    <div className="flex flex-col h-full bg-white/65 dark:bg-zinc-900/55 backdrop-blur-xl p-6 md:p-8 overflow-y-auto rounded-3xl border border-white/70 dark:border-zinc-800 shadow-xl">
       <div className="max-w-4xl mx-auto w-full space-y-8">
         <div>
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white flex items-center gap-3">
@@ -168,7 +137,7 @@ export default function VoicePage() {
           </div>
         )}
 
-        <div className="bg-gray-50 dark:bg-zinc-900 rounded-2xl p-6 border border-gray-200 dark:border-zinc-800 space-y-4">
+        <div className="bg-white/80 dark:bg-zinc-900/80 rounded-2xl p-6 border border-gray-200/80 dark:border-zinc-700 space-y-4 shadow-sm">
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               待合成文本 *
@@ -208,7 +177,7 @@ export default function VoicePage() {
             <button
               onClick={handleGenerate}
               disabled={isSubmitting || !text.trim() || !apiKey}
-              className="flex items-center gap-2 px-6 py-2.5 bg-orange-600 text-white rounded-xl hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-orange-500 to-amber-500 text-white rounded-xl hover:from-orange-600 hover:to-amber-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm"
             >
               {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <PlayCircle className="w-5 h-5" />}
               提交任务
@@ -226,7 +195,7 @@ export default function VoicePage() {
                 const isExpanded = expandedTasks[task.id] ?? false;
 
                 return (
-                  <div key={task.id} className="bg-white dark:bg-zinc-900 rounded-xl p-4 border border-gray-200 dark:border-zinc-800 shadow-sm flex flex-col gap-3 transition-all">
+                  <div key={task.id} className="bg-white/90 dark:bg-zinc-900/90 rounded-xl p-4 border border-gray-200 dark:border-zinc-800 shadow-sm flex flex-col gap-3 transition-all">
                     <div
                       className="flex items-start justify-between cursor-pointer group"
                       onClick={() => toggleTask(task.id)}

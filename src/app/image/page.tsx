@@ -6,6 +6,7 @@ import { useTasksStore } from "@/store/useTasksStore";
 import { appConfig } from "@/config/appConfig";
 import { ImageIcon, Loader2, PlayCircle, Clock, AlertCircle, CheckCircle2, ChevronDown, ChevronUp } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
+import { ApiError, apiRequest } from "@/lib/apiClient";
 
 export default function ImagePage() {
   const { apiKey } = useSettingsStore();
@@ -47,24 +48,17 @@ export default function ImagePage() {
     setExpandedTasks(prev => ({ ...prev, [localTaskId]: true }));
 
     try {
-      const response = await fetch(`${appConfig.apiBaseUrl}/image_generation`, {
+      const data = await apiRequest<{ data?: { image_base64?: string[] } }>({
+        path: "/image_generation",
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify({
+        apiKey,
+        body: {
           model: appConfig.models.imageDefault,
           prompt: prompt,
           aspect_ratio: aspectRatio,
           response_format: "base64",
-        }),
+        },
       });
-
-      const data = await response.json();
-      if (!response.ok || (data.base_resp && data.base_resp.status_code !== 0)) {
-        throw new Error(data.base_resp?.status_msg || data.error?.message || "图片生成失败");
-      }
 
       const base64Str = data.data?.image_base64?.[0];
       if (base64Str) {
@@ -79,7 +73,7 @@ export default function ImagePage() {
       setPrompt("");
 
     } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : "未知错误";
+      const errorMessage = error instanceof ApiError ? error.message : error instanceof Error ? error.message : "未知错误";
       updateTask(localTaskId, {
         status: 'Fail',
         errorMessage
@@ -91,7 +85,7 @@ export default function ImagePage() {
   };
 
   return (
-    <div className="flex flex-col h-full bg-white dark:bg-zinc-950 p-6 md:p-8 overflow-y-auto">
+    <div className="flex flex-col h-full bg-white/65 dark:bg-zinc-900/55 backdrop-blur-xl p-6 md:p-8 overflow-y-auto rounded-3xl border border-white/70 dark:border-zinc-800 shadow-xl">
       <div className="max-w-4xl mx-auto w-full space-y-8">
         <div>
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white flex items-center gap-3">
@@ -109,7 +103,7 @@ export default function ImagePage() {
           </div>
         )}
 
-        <div className="bg-gray-50 dark:bg-zinc-900 rounded-2xl p-6 border border-gray-200 dark:border-zinc-800 space-y-4">
+        <div className="bg-white/80 dark:bg-zinc-900/80 rounded-2xl p-6 border border-gray-200/80 dark:border-zinc-700 space-y-4 shadow-sm">
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               图片描述 (Prompt) *
@@ -149,7 +143,7 @@ export default function ImagePage() {
             <button
               onClick={handleGenerate}
               disabled={isSubmitting || !prompt.trim() || !apiKey}
-              className="flex items-center gap-2 px-6 py-2.5 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-xl hover:from-emerald-600 hover:to-teal-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm"
             >
               {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <PlayCircle className="w-5 h-5" />}
               开始生成
@@ -167,7 +161,7 @@ export default function ImagePage() {
                 const isExpanded = expandedTasks[task.id] ?? false;
 
                 return (
-                  <div key={task.id} className="bg-white dark:bg-zinc-900 rounded-xl p-4 border border-gray-200 dark:border-zinc-800 shadow-sm flex flex-col gap-3 transition-all">
+                  <div key={task.id} className="bg-white/90 dark:bg-zinc-900/90 rounded-xl p-4 border border-gray-200 dark:border-zinc-800 shadow-sm flex flex-col gap-3 transition-all">
                     <div
                       className="flex items-start justify-between cursor-pointer group"
                       onClick={() => toggleTask(task.id)}

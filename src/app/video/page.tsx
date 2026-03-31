@@ -1,10 +1,12 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useCallback, useState } from "react";
 import { useSettingsStore } from "@/store/useSettingsStore";
-import { useTasksStore } from "@/store/useTasksStore";
+import { Task, useTasksStore } from "@/store/useTasksStore";
 import { appConfig } from "@/config/appConfig";
 import { Video, Loader2, PlayCircle, Clock, AlertCircle, CheckCircle2, ChevronDown, ChevronUp } from "lucide-react";
+import { ApiError, apiRequest } from "@/lib/apiClient";
+import { resolveFileDownloadUrl, useTaskPolling } from "@/lib/taskPolling";
 
 export default function VideoPage() {
   const { apiKey } = useSettingsStore();
@@ -25,70 +27,41 @@ export default function VideoPage() {
   // 仅展示视频任务
   const videoTasks = tasks.filter(t => t.type === 'video');
 
-  // 轮询未完成的任务
-  const pollingRef = useRef<NodeJS.Timeout | null>(null);
+  const autoExpand = useCallback((id: string) => {
+    setExpandedTasks((prev) => ({ ...prev, [id]: true }));
+  }, []);
 
-  useEffect(() => {
-    const pollTasks = async () => {
-      if (!apiKey) return;
+  const queryVideoTask = useCallback(async (task: Task, key: string): Promise<Partial<Task>> => {
+    const queryData = await apiRequest<{ status?: string; file_id?: string; error_message?: string }>({
+      path: `/query/video_generation?task_id=${encodeURIComponent(task.id)}`,
+      apiKey: key,
+    });
 
-      const pendingTasks = tasks.filter(t => t.type === 'video' && (t.status === 'Processing' || t.status === 'Queuing'));
-
-      if (pendingTasks.length === 0) {
-        if (pollingRef.current) clearTimeout(pollingRef.current);
-        return;
+    if (queryData.status === "Success") {
+      if (!queryData.file_id) {
+        return { status: "Fail" as const, errorMessage: "任务完成但未返回文件 ID" };
       }
-
-      for (const task of pendingTasks) {
-        try {
-          const queryRes = await fetch(`${appConfig.apiBaseUrl}/query/video_generation?task_id=${task.id}`, {
-            headers: {
-              "Authorization": `Bearer ${apiKey}`,
-            },
-          });
-          const queryData = await queryRes.json();
-
-          if (queryData.status === "Success") {
-            const fileId = queryData.file_id;
-            const fileRes = await fetch(`${appConfig.apiBaseUrl}/files/retrieve?file_id=${fileId}`, {
-              headers: { "Authorization": `Bearer ${apiKey}` },
-            });
-            const fileData = await fileRes.json();
-
-            if (fileData.file?.download_url) {
-              updateTask(task.id, {
-                status: 'Success',
-                resultUrl: fileData.file.download_url
-              });
-              setExpandedTasks(prev => ({ ...prev, [task.id]: true }));
-            } else {
-              updateTask(task.id, {
-                status: 'Fail',
-                errorMessage: '无法获取视频下载链接'
-              });
-            }
-          } else if (queryData.status === "Fail") {
-            updateTask(task.id, {
-              status: 'Fail',
-              errorMessage: queryData.error_message || "未知错误"
-            });
-          } else {
-            updateTask(task.id, { status: queryData.status || 'Processing' });
-          }
-        } catch (e) {
-          console.error("Polling error:", e);
-        }
+      const downloadUrl = await resolveFileDownloadUrl(queryData.file_id, key);
+      if (!downloadUrl) {
+        return { status: "Fail" as const, errorMessage: "无法获取视频下载链接" };
       }
+      return { status: "Success" as const, resultUrl: downloadUrl };
+    }
+    if (queryData.status === "Fail") {
+      return { status: "Fail" as const, errorMessage: queryData.error_message || "未知错误" };
+    }
+    return { status: "Processing" as const };
+  }, []);
 
-      pollingRef.current = setTimeout(pollTasks, 5000);
-    };
-
-    pollTasks();
-
-    return () => {
-      if (pollingRef.current) clearTimeout(pollingRef.current);
-    };
-  }, [tasks, apiKey, updateTask]);
+  useTaskPolling({
+    apiKey,
+    tasks,
+    type: "video",
+    intervalMs: 5000,
+    queryTask: queryVideoTask,
+    updateTask,
+    autoExpand,
+  });
 
   const handleGenerate = async () => {
     if (!prompt.trim() || !apiKey) return;
@@ -97,22 +70,15 @@ export default function VideoPage() {
     setErrorMsg("");
 
     try {
-      const createRes = await fetch(`${appConfig.apiBaseUrl}/video_generation`, {
+      const createData = await apiRequest<{ task_id: string }>({
+        path: "/video_generation",
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify({
+        apiKey,
+        body: {
           prompt: prompt,
           model: model,
-        }),
+        },
       });
-
-      const createData = await createRes.json();
-      if (!createRes.ok || (createData.base_resp && createData.base_resp.status_code !== 0)) {
-        throw new Error(createData.base_resp?.status_msg || createData.error?.message || "创建任务失败");
-      }
 
       addTask({
         id: createData.task_id,
@@ -125,7 +91,7 @@ export default function VideoPage() {
       setPrompt("");
 
     } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : "未知错误";
+      const errorMessage = error instanceof ApiError ? error.message : error instanceof Error ? error.message : "未知错误";
       setErrorMsg(errorMessage);
     } finally {
       setIsSubmitting(false);
@@ -133,7 +99,7 @@ export default function VideoPage() {
   };
 
   return (
-    <div className="flex flex-col h-full bg-white dark:bg-zinc-950 p-6 md:p-8 overflow-y-auto">
+    <div className="flex flex-col h-full bg-white/65 dark:bg-zinc-900/55 backdrop-blur-xl p-6 md:p-8 overflow-y-auto rounded-3xl border border-white/70 dark:border-zinc-800 shadow-xl">
       <div className="max-w-4xl mx-auto w-full space-y-8">
         <div>
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white flex items-center gap-3">
@@ -151,7 +117,7 @@ export default function VideoPage() {
           </div>
         )}
 
-        <div className="bg-gray-50 dark:bg-zinc-900 rounded-2xl p-6 border border-gray-200 dark:border-zinc-800 space-y-4">
+        <div className="bg-white/80 dark:bg-zinc-900/80 rounded-2xl p-6 border border-gray-200/80 dark:border-zinc-700 space-y-4 shadow-sm">
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               模型选择
@@ -191,7 +157,7 @@ export default function VideoPage() {
             <button
               onClick={handleGenerate}
               disabled={isSubmitting || !prompt.trim() || !apiKey}
-              className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm"
             >
               {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <PlayCircle className="w-5 h-5" />}
               提交任务
@@ -209,7 +175,7 @@ export default function VideoPage() {
                 const isExpanded = expandedTasks[task.id] ?? false;
 
                 return (
-                  <div key={task.id} className="bg-white dark:bg-zinc-900 rounded-xl p-4 border border-gray-200 dark:border-zinc-800 shadow-sm flex flex-col gap-3 transition-all">
+                  <div key={task.id} className="bg-white/90 dark:bg-zinc-900/90 rounded-xl p-4 border border-gray-200 dark:border-zinc-800 shadow-sm flex flex-col gap-3 transition-all">
                     <div
                       className="flex items-start justify-between cursor-pointer group"
                       onClick={() => toggleTask(task.id)}

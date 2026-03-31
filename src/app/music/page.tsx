@@ -6,6 +6,7 @@ import { useTasksStore } from "@/store/useTasksStore";
 import { appConfig } from "@/config/appConfig";
 import { Music, Loader2, PlayCircle, Clock, AlertCircle, CheckCircle2 } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
+import { ApiError, apiRequest } from "@/lib/apiClient";
 
 export default function MusicPage() {
   const { apiKey } = useSettingsStore();
@@ -35,13 +36,11 @@ export default function MusicPage() {
     });
 
     try {
-      const response = await fetch(`${appConfig.apiBaseUrl}/music_generation`, {
+      const data = await apiRequest<{ data?: { audio_url?: string; audio?: string }; audio_url?: string; url?: string }>({
+        path: "/music_generation",
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify({
+        apiKey,
+        body: {
           model: appConfig.models.musicDefault,
           prompt: prompt,
           lyrics: lyrics.trim() || undefined,
@@ -52,15 +51,8 @@ export default function MusicPage() {
             format: appConfig.audio.music.format
           },
           output_format: "url"
-        }),
+        },
       });
-
-      const data = await response.json();
-      if (!response.ok || (data.base_resp && data.base_resp.status_code !== 0)) {
-        throw new Error(data.base_resp?.status_msg || data.error?.message || "音乐生成失败");
-      }
-
-      // Check where the URL is in the response
       const url = data.data?.audio_url || data.audio_url || data.url || data.data?.audio;
 
       if (url) {
@@ -76,7 +68,7 @@ export default function MusicPage() {
       setLyrics("");
 
     } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : "未知错误";
+      const errorMessage = error instanceof ApiError ? error.message : error instanceof Error ? error.message : "未知错误";
       updateTask(localTaskId, {
         status: 'Fail',
         errorMessage
@@ -88,7 +80,7 @@ export default function MusicPage() {
   };
 
   return (
-    <div className="flex flex-col h-full bg-white dark:bg-zinc-950 p-6 md:p-8 overflow-y-auto">
+    <div className="flex flex-col h-full bg-white/65 dark:bg-zinc-900/55 backdrop-blur-xl p-6 md:p-8 overflow-y-auto rounded-3xl border border-white/70 dark:border-zinc-800 shadow-xl">
       <div className="max-w-4xl mx-auto w-full space-y-8">
         <div>
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white flex items-center gap-3">
@@ -106,7 +98,7 @@ export default function MusicPage() {
           </div>
         )}
 
-        <div className="bg-gray-50 dark:bg-zinc-900 rounded-2xl p-6 border border-gray-200 dark:border-zinc-800 space-y-4">
+        <div className="bg-white/80 dark:bg-zinc-900/80 rounded-2xl p-6 border border-gray-200/80 dark:border-zinc-700 space-y-4 shadow-sm">
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               音乐风格 (Prompt) *
@@ -142,7 +134,7 @@ export default function MusicPage() {
             <button
               onClick={handleGenerate}
               disabled={isSubmitting || !prompt.trim() || !apiKey}
-              className="flex items-center gap-2 px-6 py-2.5 bg-purple-600 text-white rounded-xl hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-purple-600 to-fuchsia-600 text-white rounded-xl hover:from-purple-700 hover:to-fuchsia-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm"
             >
               {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <PlayCircle className="w-5 h-5" />}
               提交任务
@@ -157,7 +149,7 @@ export default function MusicPage() {
           ) : (
             <div className="grid gap-4">
               {musicTasks.map(task => (
-                <div key={task.id} className="bg-white dark:bg-zinc-900 rounded-xl p-4 border border-gray-200 dark:border-zinc-800 shadow-sm flex flex-col gap-3">
+                <div key={task.id} className="bg-white/90 dark:bg-zinc-900/90 rounded-xl p-4 border border-gray-200 dark:border-zinc-800 shadow-sm flex flex-col gap-3">
                   <div className="flex items-start justify-between">
                     <p className="text-sm text-gray-700 dark:text-gray-300 line-clamp-2 flex-1 pr-4">
                       <span className="font-semibold mr-2">Prompt:</span>

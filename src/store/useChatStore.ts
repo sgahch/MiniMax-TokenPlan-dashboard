@@ -25,6 +25,8 @@ interface ChatStoreState {
   addMessage: (sessionId: string, message: Omit<Message, 'id' | 'createdAt'>) => void;
 }
 
+const MAX_SESSIONS = 40;
+
 export const useChatStore = create<ChatStoreState>()(
   persist(
     (set) => ({
@@ -46,7 +48,7 @@ export const useChatStore = create<ChatStoreState>()(
           updatedAt: Date.now(),
         };
         set((state) => ({
-          sessions: [newSession, ...state.sessions],
+          sessions: [newSession, ...state.sessions].slice(0, MAX_SESSIONS),
           activeSessionId: newSession.id,
         }));
       },

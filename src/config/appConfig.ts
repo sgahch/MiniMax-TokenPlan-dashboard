@@ -35,6 +35,15 @@ type AppConfig = {
   };
 };
 
+type PartialAppConfig = Partial<{
+  apiBaseUrl: string;
+  models: Partial<AppConfig["models"]>;
+  audio: Partial<{
+    voice: Partial<AppConfig["audio"]["voice"]>;
+    music: Partial<AppConfig["audio"]["music"]>;
+  }>;
+}>;
+
 const defaultConfig: AppConfig = {
   apiBaseUrl: "https://api.minimaxi.com/v1",
   models: {
@@ -72,29 +81,60 @@ const defaultConfig: AppConfig = {
   }
 };
 
+const normalizeConfig = (config: AppConfig): AppConfig => {
+  const safeUrl = typeof config.apiBaseUrl === "string" && config.apiBaseUrl.trim().length > 0
+    ? config.apiBaseUrl
+    : defaultConfig.apiBaseUrl;
+  const safeVoiceOptions = config.models.voiceOptions?.length ? config.models.voiceOptions : defaultConfig.models.voiceOptions;
+  const safeVideoOptions = config.models.videoOptions?.length ? config.models.videoOptions : defaultConfig.models.videoOptions;
+  const safeImageOptions = config.models.imageOptions?.length ? config.models.imageOptions : defaultConfig.models.imageOptions;
+  const safeMusicOptions = config.models.musicOptions?.length ? config.models.musicOptions : defaultConfig.models.musicOptions;
+  const safeChatOptions = config.models.chatOptions?.length ? config.models.chatOptions : defaultConfig.models.chatOptions;
+
+  return {
+    ...config,
+    apiBaseUrl: safeUrl,
+    models: {
+      ...config.models,
+      chatDefault: safeChatOptions.includes(config.models.chatDefault) ? config.models.chatDefault : safeChatOptions[0],
+      voiceDefault: safeVoiceOptions.some((v) => v.id === config.models.voiceDefault) ? config.models.voiceDefault : safeVoiceOptions[0].id,
+      videoDefault: safeVideoOptions.includes(config.models.videoDefault) ? config.models.videoDefault : safeVideoOptions[0],
+      imageDefault: safeImageOptions.includes(config.models.imageDefault) ? config.models.imageDefault : safeImageOptions[0],
+      musicDefault: safeMusicOptions.includes(config.models.musicDefault) ? config.models.musicDefault : safeMusicOptions[0],
+      chatOptions: safeChatOptions,
+      voiceOptions: safeVoiceOptions,
+      videoOptions: safeVideoOptions,
+      imageOptions: safeImageOptions,
+      musicOptions: safeMusicOptions
+    }
+  };
+};
+
+const typedUserConfig = userConfig as PartialAppConfig;
+
 const mergedConfig: AppConfig = {
   ...defaultConfig,
-  ...userConfig,
+  ...typedUserConfig,
   models: {
     ...defaultConfig.models,
-    ...userConfig.models,
-    chatOptions: userConfig.models?.chatOptions?.length ? userConfig.models.chatOptions : defaultConfig.models.chatOptions,
-    voiceOptions: userConfig.models?.voiceOptions?.length ? userConfig.models.voiceOptions : defaultConfig.models.voiceOptions,
-    videoOptions: userConfig.models?.videoOptions?.length ? userConfig.models.videoOptions : defaultConfig.models.videoOptions,
-    imageOptions: userConfig.models?.imageOptions?.length ? userConfig.models.imageOptions : defaultConfig.models.imageOptions,
-    musicOptions: userConfig.models?.musicOptions?.length ? userConfig.models.musicOptions : defaultConfig.models.musicOptions
+    ...typedUserConfig.models,
+    chatOptions: typedUserConfig.models?.chatOptions?.length ? typedUserConfig.models.chatOptions : defaultConfig.models.chatOptions,
+    voiceOptions: typedUserConfig.models?.voiceOptions?.length ? typedUserConfig.models.voiceOptions : defaultConfig.models.voiceOptions,
+    videoOptions: typedUserConfig.models?.videoOptions?.length ? typedUserConfig.models.videoOptions : defaultConfig.models.videoOptions,
+    imageOptions: typedUserConfig.models?.imageOptions?.length ? typedUserConfig.models.imageOptions : defaultConfig.models.imageOptions,
+    musicOptions: typedUserConfig.models?.musicOptions?.length ? typedUserConfig.models.musicOptions : defaultConfig.models.musicOptions
   },
   audio: {
     voice: {
       ...defaultConfig.audio.voice,
-      ...userConfig.audio?.voice
+      ...typedUserConfig.audio?.voice
     },
     music: {
       ...defaultConfig.audio.music,
-      ...userConfig.audio?.music
+      ...typedUserConfig.audio?.music
     }
   }
 };
 
-export const appConfig = mergedConfig;
+export const appConfig = normalizeConfig(mergedConfig);
 export type { AppConfig, VoiceOption };

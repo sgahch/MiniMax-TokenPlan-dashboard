@@ -5,6 +5,9 @@ import { useSettingsStore } from "@/store/useSettingsStore";
 import { useChatStore } from "@/store/useChatStore";
 import { appConfig } from "@/config/appConfig";
 import { Send, Bot, User, PlusCircle, MessageSquare, Trash2 } from "lucide-react";
+import { apiRequest, ApiError } from "@/lib/apiClient";
+
+const MAX_CONTEXT_MESSAGES = 16;
 
 export default function ChatPage() {
   const { apiKey } = useSettingsStore();
@@ -46,35 +49,28 @@ export default function ChatPage() {
     setIsLoading(true);
 
     try {
-      const response = await fetch(`${appConfig.apiBaseUrl}/text/chatcompletion_v2`, {
+      const recentMessages = activeSession.messages.slice(-MAX_CONTEXT_MESSAGES);
+      const data = await apiRequest<{ choices?: Array<{ message?: { content?: string } }> }>({
+        path: "/text/chatcompletion_v2",
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify({
+        apiKey,
+        body: {
           model: appConfig.models.chatDefault,
           messages: [
-            ...activeSession.messages.map((m) => ({
+            ...recentMessages.map((m) => ({
               role: m.role === "bot" ? "assistant" : "user",
               content: m.content,
             })),
             { role: "user", content: userMsg },
           ],
-        }),
+        },
       });
-
-      const data = await response.json();
-
-      if (!response.ok || (data.base_resp && data.base_resp.status_code !== 0)) {
-        throw new Error(data.base_resp?.status_msg || data.error?.message || `API Error: ${response.status}`);
-      }
 
       const botMsg = data.choices?.[0]?.message?.content || JSON.stringify(data);
 
       addMessage(activeSession.id, { role: "bot", content: botMsg });
     } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : "未知错误";
+      const errorMessage = error instanceof ApiError ? error.message : error instanceof Error ? error.message : "未知错误";
       addMessage(activeSession.id, { role: "bot", content: `请求失败: ${errorMessage}` });
     } finally {
       setIsLoading(false);
@@ -82,13 +78,12 @@ export default function ChatPage() {
   };
 
   return (
-    <div className="flex h-full bg-white dark:bg-zinc-950">
-      {/* 历史记录侧边栏 */}
-      <div className="w-64 border-r border-gray-200 dark:border-zinc-800 bg-gray-50/50 dark:bg-zinc-900/50 flex flex-col">
-        <div className="p-4 border-b border-gray-200 dark:border-zinc-800">
+    <div className="flex h-full rounded-3xl border border-white/70 dark:border-zinc-800 bg-white/65 dark:bg-zinc-900/55 backdrop-blur-xl shadow-xl overflow-hidden">
+      <div className="w-72 border-r border-white/80 dark:border-zinc-800 bg-white/60 dark:bg-zinc-900/40 flex flex-col">
+        <div className="p-4 border-b border-white/70 dark:border-zinc-800">
           <button
             onClick={() => createSession()}
-            className="flex items-center gap-2 w-full px-4 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors justify-center font-medium"
+            className="flex items-center gap-2 w-full px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all justify-center font-medium shadow-sm"
           >
             <PlusCircle className="w-5 h-5" />
             新建对话
@@ -99,10 +94,10 @@ export default function ChatPage() {
             <div
               key={session.id}
               onClick={() => setActiveSession(session.id)}
-              className={`flex items-center justify-between p-3 rounded-xl cursor-pointer transition-colors group ${
+            className={`flex items-center justify-between p-3 rounded-xl cursor-pointer transition-all group border ${
                 activeSessionId === session.id
-                  ? "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400"
-                  : "hover:bg-gray-100 dark:hover:bg-zinc-800 text-gray-700 dark:text-gray-300"
+                  ? "bg-gradient-to-r from-blue-500/20 to-indigo-500/20 dark:from-blue-500/25 dark:to-indigo-500/20 text-blue-700 dark:text-blue-300 border-blue-200/80 dark:border-blue-700/50"
+                  : "hover:bg-white dark:hover:bg-zinc-800 text-gray-700 dark:text-gray-300 border-transparent"
               }`}
             >
               <div className="flex items-center gap-3 overflow-hidden">
@@ -123,7 +118,6 @@ export default function ChatPage() {
         </div>
       </div>
 
-      {/* 聊天主区域 */}
       <div className="flex-1 flex flex-col h-full relative">
         {!activeSession ? (
           <div className="flex-1 flex items-center justify-center text-gray-500">
@@ -178,7 +172,7 @@ export default function ChatPage() {
               <div ref={messagesEndRef} />
             </div>
 
-            <div className="p-4 bg-white dark:bg-zinc-950">
+            <div className="p-4 bg-white/70 dark:bg-zinc-900/60 border-t border-white/80 dark:border-zinc-800">
               <div className="max-w-3xl mx-auto relative flex items-end gap-2">
                 {!apiKey && (
                   <div className="absolute -top-10 left-0 text-sm text-red-500 bg-red-50 dark:bg-red-900/20 px-3 py-1.5 rounded-lg border border-red-200 dark:border-red-900/50">
@@ -195,14 +189,14 @@ export default function ChatPage() {
                     }
                   }}
                   placeholder="输入消息..."
-                  className="flex-1 max-h-48 min-h-[56px] px-4 py-3 bg-gray-100 dark:bg-zinc-800 rounded-2xl resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-white"
+                  className="flex-1 max-h-48 min-h-[56px] px-4 py-3 bg-white dark:bg-zinc-800 rounded-2xl border border-gray-200 dark:border-zinc-700 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-white shadow-sm"
                   rows={1}
                   disabled={!apiKey || isLoading}
                 />
                 <button
                   onClick={handleSend}
                   disabled={!input.trim() || !apiKey || isLoading}
-                  className="p-3.5 bg-blue-600 text-white rounded-2xl hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shrink-0"
+                  className="p-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-2xl hover:from-blue-700 hover:to-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shrink-0 shadow-sm"
                 >
                   <Send className="w-5 h-5" />
                 </button>
