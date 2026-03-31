@@ -5,6 +5,8 @@
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
+Badges by [Shields.io](https://shields.io/).
+
 中文 | [English](#english)
 
 ## 中文
