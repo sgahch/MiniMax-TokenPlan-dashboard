@@ -1,12 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { appConfig } from "@/config/appConfig";
 import { useSettingsStore } from "@/store/useSettingsStore";
 import { ApiError } from "@/lib/apiClient";
 import {
   ModelRemain,
   buildProgressBar,
   fetchTokenPlanRemains,
+  findModelRemain,
   formatDateTime,
   formatDuration,
   getUsageColorClass,
@@ -78,10 +80,24 @@ export default function TokenPlanStatusBar() {
     };
   }, []);
 
-  const minimaxMRemains = useMemo(
-    () => snapshot.data.filter((item) => /^minimax-m/i.test(item.model_name.trim())),
-    [snapshot.data]
+  const preferredStatusModels = useMemo(
+    () => appConfig.models.tokenPlanStatusModels.map((model) => model.trim()).filter((model) => model.length > 0),
+    []
   );
+  const minimaxMRemains = useMemo(() => {
+    const modelList = snapshot.data.filter((item) => /^minimax-m/i.test(item.model_name.trim()));
+    if (modelList.length === 0) {
+      return [];
+    }
+    const preferred = preferredStatusModels
+      .map((model) => findModelRemain(modelList, model))
+      .filter((item): item is ModelRemain => Boolean(item));
+    const uniquePreferred = preferred.filter(
+      (item, index, list) =>
+        list.findIndex((candidate) => candidate.model_name.trim().toLowerCase() === item.model_name.trim().toLowerCase()) === index
+    );
+    return uniquePreferred.length > 0 ? uniquePreferred : modelList;
+  }, [snapshot.data, preferredStatusModels]);
   const primaryRemain = minimaxMRemains[0] ?? snapshot.data[0];
   const liveIntervalRemainMs = primaryRemain ? toLiveRemainsMs(primaryRemain.remains_time, snapshot.fetchedAt, now) : 0;
 

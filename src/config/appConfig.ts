@@ -19,6 +19,7 @@ type AppConfig = {
     imageOptions: string[];
     musicDefault: string;
     musicOptions: string[];
+    tokenPlanStatusModels: string[];
   };
   audio: {
     voice: {
@@ -64,7 +65,8 @@ const defaultConfig: AppConfig = {
     imageDefault: "image-01",
     imageOptions: ["1:1", "16:9", "9:16", "4:3", "3:4"],
     musicDefault: "music-2.5",
-    musicOptions: ["music-2.5"]
+    musicOptions: ["music-2.5"],
+    tokenPlanStatusModels: ["MiniMax-M2.7-highspeed"]
   },
   audio: {
     voice: {
@@ -90,6 +92,9 @@ const normalizeConfig = (config: AppConfig): AppConfig => {
   const safeImageOptions = config.models.imageOptions?.length ? config.models.imageOptions : defaultConfig.models.imageOptions;
   const safeMusicOptions = config.models.musicOptions?.length ? config.models.musicOptions : defaultConfig.models.musicOptions;
   const safeChatOptions = config.models.chatOptions?.length ? config.models.chatOptions : defaultConfig.models.chatOptions;
+  const safeTokenPlanStatusModels = (config.models.tokenPlanStatusModels ?? [])
+    .map((model) => model.trim())
+    .filter((model) => model.length > 0);
 
   return {
     ...config,
@@ -105,7 +110,8 @@ const normalizeConfig = (config: AppConfig): AppConfig => {
       voiceOptions: safeVoiceOptions,
       videoOptions: safeVideoOptions,
       imageOptions: safeImageOptions,
-      musicOptions: safeMusicOptions
+      musicOptions: safeMusicOptions,
+      tokenPlanStatusModels: safeTokenPlanStatusModels.length > 0 ? safeTokenPlanStatusModels : [safeChatOptions[0]]
     }
   };
 };
@@ -122,7 +128,8 @@ const mergedConfig: AppConfig = {
     voiceOptions: typedUserConfig.models?.voiceOptions?.length ? typedUserConfig.models.voiceOptions : defaultConfig.models.voiceOptions,
     videoOptions: typedUserConfig.models?.videoOptions?.length ? typedUserConfig.models.videoOptions : defaultConfig.models.videoOptions,
     imageOptions: typedUserConfig.models?.imageOptions?.length ? typedUserConfig.models.imageOptions : defaultConfig.models.imageOptions,
-    musicOptions: typedUserConfig.models?.musicOptions?.length ? typedUserConfig.models.musicOptions : defaultConfig.models.musicOptions
+    musicOptions: typedUserConfig.models?.musicOptions?.length ? typedUserConfig.models.musicOptions : defaultConfig.models.musicOptions,
+    tokenPlanStatusModels: typedUserConfig.models?.tokenPlanStatusModels?.length ? typedUserConfig.models.tokenPlanStatusModels : defaultConfig.models.tokenPlanStatusModels
   },
   audio: {
     voice: {

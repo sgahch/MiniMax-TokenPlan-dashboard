@@ -18,7 +18,8 @@
     "imageDefault": "image-01",
     "imageOptions": ["1:1", "16:9", "9:16", "4:3", "3:4"],
     "musicDefault": "music-2.5",
-    "musicOptions": ["music-2.5"]
+    "musicOptions": ["music-2.5"],
+    "tokenPlanStatusModels": ["MiniMax-M2.7-highspeed"]
   },
   "audio": {
     "voice": {
