@@ -1,21 +1,19 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { appConfig } from "@/config/appConfig";
 import { useSettingsStore } from "@/store/useSettingsStore";
 import { ApiError } from "@/lib/apiClient";
 import {
   ModelRemain,
   buildProgressBar,
-  findModelRemain,
   fetchTokenPlanRemains,
+  formatDateTime,
   formatDuration,
-  getDaysLeft,
-  getExpireColorClass,
   getUsageColorClass,
   getUsageStats,
 } from "@/lib/tokenPlan";
-import { Badge, Button, Group, Paper, Stack, Text } from "@mantine/core";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 
 type Snapshot = {
   data: ModelRemain[];
@@ -80,77 +78,81 @@ export default function TokenPlanStatusBar() {
     };
   }, []);
 
-  const chatRemain = useMemo(() => findModelRemain(snapshot.data, appConfig.models.chatDefault), [snapshot.data]);
-  const videoRemain = useMemo(() => findModelRemain(snapshot.data, appConfig.models.videoDefault), [snapshot.data]);
-
-  const chatIntervalStats = useMemo(() => {
-    if (!chatRemain) {
-      return { total: 0, available: 0, used: 0, percent: 0 };
-    }
-    return getUsageStats(chatRemain.current_interval_total_count, chatRemain.current_interval_usage_count);
-  }, [chatRemain]);
-
-  const videoIntervalStats = useMemo(() => {
-    if (!videoRemain) {
-      return { total: 0, available: 0, used: 0, percent: 0 };
-    }
-    return getUsageStats(videoRemain.current_interval_total_count, videoRemain.current_interval_usage_count);
-  }, [videoRemain]);
-
-  const liveIntervalRemainMs = chatRemain ? toLiveRemainsMs(chatRemain.remains_time, snapshot.fetchedAt, now) : 0;
-  const expireAt = chatRemain ? Math.max(chatRemain.end_time, chatRemain.weekly_end_time) : 0;
-  const daysLeft = getDaysLeft(expireAt);
-  const chatUsageColor = getUsageColorClass(chatIntervalStats.percent);
-  const videoUsageColor = getUsageColorClass(videoIntervalStats.percent);
-  const expireColor = getExpireColorClass(daysLeft);
-  const chatUsageBar = buildProgressBar(chatIntervalStats.percent);
-  const videoUsageBar = buildProgressBar(videoIntervalStats.percent);
+  const minimaxMRemains = useMemo(
+    () => snapshot.data.filter((item) => /^minimax-m/i.test(item.model_name.trim())),
+    [snapshot.data]
+  );
+  const primaryRemain = minimaxMRemains[0] ?? snapshot.data[0];
+  const liveIntervalRemainMs = primaryRemain ? toLiveRemainsMs(primaryRemain.remains_time, snapshot.fetchedAt, now) : 0;
 
   return (
-    <Paper className="fixed bottom-0 left-0 right-0 z-30 border-t border-gray-200/80 dark:border-zinc-800 bg-white/92 dark:bg-zinc-950/92 backdrop-blur-md px-4 py-2" radius={0}>
+    <div className="fixed bottom-0 left-0 right-0 z-30 border-t border-gray-200/80 dark:border-zinc-800 bg-white/92 dark:bg-zinc-950/92 backdrop-blur-md px-4 py-2">
       <div className="font-mono text-xs text-gray-700 dark:text-gray-200 overflow-x-auto whitespace-nowrap">
         {error ? (
           <span className="text-red-500">Token Plan 状态异常：{error}</span>
         ) : (
           <>
-            <span>Usage </span>
-            <span className={chatUsageColor}>{chatUsageBar}</span>
-            <span className="ml-1">
-              {chatIntervalStats.percent}%({chatIntervalStats.available.toLocaleString("zh-CN")}/{chatIntervalStats.total.toLocaleString("zh-CN")})
-            </span>
-            <span className="mx-2 text-gray-400">│</span>
-            <span>Video </span>
-            <span className={videoUsageColor}>{videoUsageBar}</span>
-            <span className="ml-1">
-              {videoIntervalStats.percent}%({videoIntervalStats.available.toLocaleString("zh-CN")}/{videoIntervalStats.total.toLocaleString("zh-CN")})
-            </span>
+            <span>MiniMax-M* </span>
+            {minimaxMRemains.length === 0 ? (
+              <span className="text-gray-500">暂无匹配模型</span>
+            ) : (
+              minimaxMRemains.map((item, index) => {
+                const stats = getUsageStats(item.current_interval_total_count, item.current_interval_usage_count);
+                const bar = buildProgressBar(stats.percent);
+                const color = getUsageColorClass(stats.percent);
+                return (
+                  <span key={item.model_name}>
+                    {index > 0 && <span className="mx-2 text-gray-400">│</span>}
+                    <span className="mr-1">{item.model_name}</span>
+                    <span className={color}>{bar}</span>
+                    <span className="ml-1">
+                      {stats.percent}%({stats.available.toLocaleString("zh-CN")}/{stats.total.toLocaleString("zh-CN")})
+                    </span>
+                  </span>
+                );
+              })
+            )}
             <span className="mx-2 text-gray-400">│</span>
             <span>⏱ {formatDuration(liveIntervalRemainMs)}</span>
-            <span className="mx-2 text-gray-400">│</span>
-            <span className={expireColor}>到期 {daysLeft} 天</span>
-            <Button variant="default" size="compact-xs" className="ml-3" onClick={() => setExpanded((v) => !v)}>{expanded ? "收起" : "详细"}</Button>
+            <Button variant="outline" size="sm" className="ml-3 h-6" onClick={() => setExpanded((v) => !v)}>{expanded ? "收起" : "详细"}</Button>
             {loading && <span className="ml-2 text-gray-500">刷新中...</span>}
           </>
         )}
       </div>
 
-      {expanded && !error && chatRemain && (
-        <Stack className="border-t border-gray-200/80 dark:border-zinc-800 py-3 mt-2" gap={8}>
-          <Group gap={8}>
-            <Badge color="cyan" variant="light">聊天模型</Badge>
-            <Text size="xs">{chatRemain.model_name}</Text>
-          </Group>
-          <Text size="xs">周期窗口：{new Date(chatRemain.start_time).toLocaleString("zh-CN", { hour12: false })} - {new Date(chatRemain.end_time).toLocaleString("zh-CN", { hour12: false })}</Text>
-          <Text size="xs">Usage：{chatUsageBar} {chatIntervalStats.percent}%（{chatIntervalStats.available.toLocaleString("zh-CN")}/{chatIntervalStats.total.toLocaleString("zh-CN")}）</Text>
-          <Text size="xs">重置倒计时：{formatDuration(liveIntervalRemainMs)}</Text>
-          <Group gap={8} mt={4}>
-            <Badge color="grape" variant="light">视频模型</Badge>
-            <Text size="xs">{videoRemain?.model_name ?? appConfig.models.videoDefault}</Text>
-          </Group>
-          <Text size="xs">Usage：{videoUsageBar} {videoIntervalStats.percent}%（{videoIntervalStats.available.toLocaleString("zh-CN")}/{videoIntervalStats.total.toLocaleString("zh-CN")}）</Text>
-          <Text size="xs">到期：{expireAt > 0 ? new Date(expireAt).toLocaleDateString("zh-CN") : "-"}（还剩 {daysLeft} 天）</Text>
-        </Stack>
+      {expanded && !error && snapshot.data.length > 0 && (
+        <div className="border-t border-gray-200/80 dark:border-zinc-800 py-3 mt-2 space-y-2 text-xs text-gray-700 dark:text-gray-200">
+          {snapshot.data.map((item) => {
+            const intervalStats = getUsageStats(item.current_interval_total_count, item.current_interval_usage_count);
+            const weeklyStats = getUsageStats(item.current_weekly_total_count, item.current_weekly_usage_count);
+            const intervalBar = buildProgressBar(intervalStats.percent);
+            const weeklyBar = buildProgressBar(weeklyStats.percent);
+            return (
+              <div key={`${item.model_name}-${item.start_time}`} className="rounded-lg border border-slate-200/80 dark:border-zinc-800 p-3 space-y-1.5">
+                <div className="flex items-center gap-2">
+                  <Badge variant={/^minimax-m/i.test(item.model_name) ? "default" : "outline"}>{item.model_name}</Badge>
+                </div>
+                <p>start_time: {formatDateTime(item.start_time)}</p>
+                <p>end_time: {formatDateTime(item.end_time)}</p>
+                <p>remains_time: {formatDuration(toLiveRemainsMs(item.remains_time, snapshot.fetchedAt, now))}</p>
+                <p className={getUsageColorClass(intervalStats.percent)}>
+                  current_interval_usage: {intervalBar} {intervalStats.percent}% ({intervalStats.available.toLocaleString("zh-CN")}/{intervalStats.total.toLocaleString("zh-CN")})
+                </p>
+                <p>current_interval_total_count: {item.current_interval_total_count.toLocaleString("zh-CN")}</p>
+                <p>current_interval_usage_count: {item.current_interval_usage_count.toLocaleString("zh-CN")}</p>
+                <p>weekly_start_time: {formatDateTime(item.weekly_start_time)}</p>
+                <p>weekly_end_time: {formatDateTime(item.weekly_end_time)}</p>
+                <p>weekly_remains_time: {formatDuration(toLiveRemainsMs(item.weekly_remains_time, snapshot.fetchedAt, now))}</p>
+                <p className={getUsageColorClass(weeklyStats.percent)}>
+                  current_weekly_usage: {weeklyBar} {weeklyStats.percent}% ({weeklyStats.available.toLocaleString("zh-CN")}/{weeklyStats.total.toLocaleString("zh-CN")})
+                </p>
+                <p>current_weekly_total_count: {item.current_weekly_total_count.toLocaleString("zh-CN")}</p>
+                <p>current_weekly_usage_count: {item.current_weekly_usage_count.toLocaleString("zh-CN")}</p>
+              </div>
+            );
+          })}
+        </div>
       )}
-    </Paper>
+    </div>
   );
 }

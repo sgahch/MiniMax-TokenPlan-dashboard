@@ -20,6 +20,7 @@ jobs:
         with:
           node-version: 20
           cache: npm
+      - run: npm version "${{ github.ref_name }}" --no-git-tag-version --allow-same-version
       - run: npm ci
       - run: npm run desktop:dist:win
       - uses: actions/upload-artifact@v4
@@ -43,6 +44,7 @@ jobs:
         with:
           node-version: 20
           cache: npm
+      - run: npm version "${{ github.ref_name }}" --no-git-tag-version --allow-same-version
       - run: npm ci
       - run: npm run desktop:dist:mac
       - uses: actions/upload-artifact@v4

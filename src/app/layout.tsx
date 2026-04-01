@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
-import "@mantine/core/styles.css";
 import "./globals.css";
 import Sidebar from "@/components/Sidebar";
 import TokenPlanStatusBar from "@/components/TokenPlanStatusBar";
