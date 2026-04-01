@@ -12,6 +12,8 @@ permissions:
 jobs:
   desktop-win:
     runs-on: windows-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -28,6 +30,8 @@ jobs:
 
   desktop-mac:
     runs-on: macos-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -57,7 +61,7 @@ jobs:
       - uses: android-actions/setup-android@v3
       - run: npm ci
       - run: npm run build:web
-      - run: npx cap add android
+      - run: if [ ! -d android ]; then npx cap add android; fi
       - run: npx cap sync android
       - run: cd android && ./gradlew assembleDebug
       - uses: actions/upload-artifact@v4
@@ -76,7 +80,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build:web
-      - run: npx cap add ios
+      - run: if [ ! -d ios ]; then npx cap add ios; fi
       - run: npx cap sync ios
       - run: xcodebuild -workspace ios/App/App.xcworkspace -scheme App -configuration Release -sdk iphonesimulator -derivedDataPath ios/build CODE_SIGNING_ALLOWED=NO
       - run: ditto -c -k --sequesterRsrc --keepParent ios/build/Build/Products/Release-iphonesimulator/App.app ios/build/App-simulator.zip
