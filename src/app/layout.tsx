@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import Sidebar from "@/components/Sidebar";
+import TokenPlanStatusBar from "@/components/TokenPlanStatusBar";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -19,9 +20,10 @@ export default function RootLayout({
     <html lang="zh-CN">
       <body className={`${inter.className} bg-slate-100 dark:bg-zinc-950 text-black dark:text-white flex h-screen overflow-hidden`}>
         <Sidebar />
-        <main className="flex-1 h-full overflow-y-auto p-4 md:p-5">
+        <main className="flex-1 h-full overflow-y-auto p-4 md:p-5 pb-24">
           {children}
         </main>
+        <TokenPlanStatusBar />
       </body>
     </html>
   );

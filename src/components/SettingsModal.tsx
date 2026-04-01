@@ -2,65 +2,13 @@
 
 import { useState } from "react";
 import { useSettingsStore } from "@/store/useSettingsStore";
-import { apiRequest, ApiError } from "@/lib/apiClient";
+import { ApiError } from "@/lib/apiClient";
+import { fetchTokenPlanRemains, formatDateTime, formatDuration, getUsageStats, ModelRemain } from "@/lib/tokenPlan";
 import { Loader2, RefreshCw, X } from "lucide-react";
 
 interface SettingsModalProps {
   onClose: () => void;
 }
-
-type ModelRemain = {
-  start_time: number;
-  end_time: number;
-  remains_time: number;
-  current_interval_total_count: number;
-  current_interval_usage_count: number;
-  model_name: string;
-  current_weekly_total_count: number;
-  current_weekly_usage_count: number;
-  weekly_start_time: number;
-  weekly_end_time: number;
-  weekly_remains_time: number;
-};
-
-type RemainsResponse = {
-  model_remains?: ModelRemain[];
-};
-
-const formatDateTime = (timestamp: number) => {
-  if (!Number.isFinite(timestamp)) {
-    return "-";
-  }
-  return new Date(timestamp).toLocaleString("zh-CN", { hour12: false });
-};
-
-const formatDuration = (ms: number) => {
-  if (!Number.isFinite(ms) || ms <= 0) {
-    return "0秒";
-  }
-  const totalSeconds = Math.floor(ms / 1000);
-  const days = Math.floor(totalSeconds / 86400);
-  const hours = Math.floor((totalSeconds % 86400) / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
-  if (days > 0) {
-    return `${days}天${hours}小时${minutes}分钟`;
-  }
-  if (hours > 0) {
-    return `${hours}小时${minutes}分钟`;
-  }
-  if (minutes > 0) {
-    return `${minutes}分钟${seconds}秒`;
-  }
-  return `${seconds}秒`;
-};
-
-const calcRemainCount = (total: number, used: number) => {
-  if (!Number.isFinite(total) || !Number.isFinite(used)) {
-    return "-";
-  }
-  return Math.max(total - used, 0).toLocaleString("zh-CN");
-};
 
 export default function SettingsModal({ onClose }: SettingsModalProps) {
   const { apiKey, rememberApiKey, setApiKey, setRememberApiKey, clearApiKey } = useSettingsStore();
@@ -94,11 +42,7 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
     setIsQueryingRemains(true);
     setRemainsError("");
     try {
-      const data = await apiRequest<RemainsResponse>({
-        path: "https://www.minimaxi.com/v1/api/openplatform/coding_plan/remains",
-        apiKey: key,
-      });
-      const list = Array.isArray(data.model_remains) ? data.model_remains : [];
+      const list = await fetchTokenPlanRemains(key);
       setRemains(list);
       setLastUpdatedAt(new Date().toLocaleString("zh-CN", { hour12: false }));
     } catch (error: unknown) {
@@ -196,10 +140,10 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
                   >
                     <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{item.model_name}</p>
                     <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-gray-600 dark:text-gray-300">
-                      <p>周期额度：{item.current_interval_usage_count.toLocaleString("zh-CN")} / {item.current_interval_total_count.toLocaleString("zh-CN")}</p>
-                      <p>周期剩余次数：{calcRemainCount(item.current_interval_total_count, item.current_interval_usage_count)}</p>
-                      <p>周额度：{item.current_weekly_usage_count.toLocaleString("zh-CN")} / {item.current_weekly_total_count.toLocaleString("zh-CN")}</p>
-                      <p>周剩余次数：{calcRemainCount(item.current_weekly_total_count, item.current_weekly_usage_count)}</p>
+                      <p>周期已用：{getUsageStats(item.current_interval_total_count, item.current_interval_usage_count).used.toLocaleString("zh-CN")} / {item.current_interval_total_count.toLocaleString("zh-CN")}</p>
+                      <p>周期可用次数：{getUsageStats(item.current_interval_total_count, item.current_interval_usage_count).available.toLocaleString("zh-CN")}</p>
+                      <p>周已用：{getUsageStats(item.current_weekly_total_count, item.current_weekly_usage_count).used.toLocaleString("zh-CN")} / {item.current_weekly_total_count.toLocaleString("zh-CN")}</p>
+                      <p>周可用次数：{getUsageStats(item.current_weekly_total_count, item.current_weekly_usage_count).available.toLocaleString("zh-CN")}</p>
                       <p>周期剩余时间：{formatDuration(item.remains_time)}</p>
                       <p>周剩余时间：{formatDuration(item.weekly_remains_time)}</p>
                       <p>周期开始：{formatDateTime(item.start_time)}</p>
