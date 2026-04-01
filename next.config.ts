@@ -18,6 +18,7 @@ const nextConfig: NextConfig = {
   output: "export",
   trailingSlash: true,
   reactCompiler: true,
+  devIndicators: false,
   env: {
     NEXT_PUBLIC_APP_DIR: appDir,
     NEXT_PUBLIC_GIT_BRANCH: readBranch(),

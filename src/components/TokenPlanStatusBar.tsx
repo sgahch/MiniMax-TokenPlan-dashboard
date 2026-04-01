@@ -7,31 +7,19 @@ import { ApiError } from "@/lib/apiClient";
 import {
   ModelRemain,
   buildProgressBar,
+  findModelRemain,
   fetchTokenPlanRemains,
   formatDuration,
+  getDaysLeft,
   getExpireColorClass,
   getUsageColorClass,
   getUsageStats,
 } from "@/lib/tokenPlan";
+import { Badge, Button, Group, Paper, Stack, Text } from "@mantine/core";
 
 type Snapshot = {
   data: ModelRemain[];
   fetchedAt: number;
-};
-
-const getActiveRemain = (list: ModelRemain[]) => {
-  if (list.length === 0) {
-    return undefined;
-  }
-  const preferred = list.find((item) => item.model_name === appConfig.models.chatDefault);
-  return preferred ?? list[0];
-};
-
-const toDaysLeft = (endTime: number) => {
-  if (!Number.isFinite(endTime)) {
-    return 0;
-  }
-  return Math.max(0, Math.ceil((endTime - Date.now()) / 86400000));
 };
 
 const toLiveRemainsMs = (value: number, fetchedAt: number, now: number) => {
@@ -48,9 +36,6 @@ export default function TokenPlanStatusBar() {
   const [error, setError] = useState("");
   const [expanded, setExpanded] = useState(false);
   const [now, setNow] = useState(Date.now());
-
-  const appDir = process.env.NEXT_PUBLIC_APP_DIR || "MiniMax-TokenPlan-Agent";
-  const branch = process.env.NEXT_PUBLIC_GIT_BRANCH || "main";
 
   const fetchRemains = useCallback(async () => {
     const key = apiKey.trim();
@@ -95,83 +80,77 @@ export default function TokenPlanStatusBar() {
     };
   }, []);
 
-  const active = useMemo(() => getActiveRemain(snapshot.data), [snapshot.data]);
+  const chatRemain = useMemo(() => findModelRemain(snapshot.data, appConfig.models.chatDefault), [snapshot.data]);
+  const videoRemain = useMemo(() => findModelRemain(snapshot.data, appConfig.models.videoDefault), [snapshot.data]);
 
-  const intervalStats = useMemo(() => {
-    if (!active) {
+  const chatIntervalStats = useMemo(() => {
+    if (!chatRemain) {
       return { total: 0, available: 0, used: 0, percent: 0 };
     }
-    return getUsageStats(active.current_interval_total_count, active.current_interval_usage_count);
-  }, [active]);
+    return getUsageStats(chatRemain.current_interval_total_count, chatRemain.current_interval_usage_count);
+  }, [chatRemain]);
 
-  const weeklyStats = useMemo(() => {
-    if (!active) {
+  const videoIntervalStats = useMemo(() => {
+    if (!videoRemain) {
       return { total: 0, available: 0, used: 0, percent: 0 };
     }
-    return getUsageStats(active.current_weekly_total_count, active.current_weekly_usage_count);
-  }, [active]);
+    return getUsageStats(videoRemain.current_interval_total_count, videoRemain.current_interval_usage_count);
+  }, [videoRemain]);
 
-  const liveIntervalRemainMs = active ? toLiveRemainsMs(active.remains_time, snapshot.fetchedAt, now) : 0;
-  const daysLeft = active ? toDaysLeft(active.end_time) : 0;
-  const usageColor = getUsageColorClass(intervalStats.percent);
+  const liveIntervalRemainMs = chatRemain ? toLiveRemainsMs(chatRemain.remains_time, snapshot.fetchedAt, now) : 0;
+  const expireAt = chatRemain ? Math.max(chatRemain.end_time, chatRemain.weekly_end_time) : 0;
+  const daysLeft = getDaysLeft(expireAt);
+  const chatUsageColor = getUsageColorClass(chatIntervalStats.percent);
+  const videoUsageColor = getUsageColorClass(videoIntervalStats.percent);
   const expireColor = getExpireColorClass(daysLeft);
-  const usageBar = buildProgressBar(intervalStats.percent);
+  const chatUsageBar = buildProgressBar(chatIntervalStats.percent);
+  const videoUsageBar = buildProgressBar(videoIntervalStats.percent);
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-gray-200/80 dark:border-zinc-800 bg-white/90 dark:bg-zinc-950/90 backdrop-blur-md">
-      <div className="px-4 py-2 font-mono text-xs text-gray-700 dark:text-gray-200 overflow-x-auto whitespace-nowrap">
+    <Paper className="fixed bottom-0 left-0 right-0 z-30 border-t border-gray-200/80 dark:border-zinc-800 bg-white/92 dark:bg-zinc-950/92 backdrop-blur-md px-4 py-2" radius={0}>
+      <div className="font-mono text-xs text-gray-700 dark:text-gray-200 overflow-x-auto whitespace-nowrap">
         {error ? (
           <span className="text-red-500">Token Plan 状态异常：{error}</span>
         ) : (
           <>
-            <span>{appDir}</span>
-            <span className="mx-2 text-gray-400">│</span>
-            <span>{branch}</span>
-            <span className="mx-2 text-gray-400">│</span>
             <span>Usage </span>
-            <span className={usageColor}>{usageBar}</span>
+            <span className={chatUsageColor}>{chatUsageBar}</span>
             <span className="ml-1">
-              {intervalStats.percent}%({intervalStats.available.toLocaleString("zh-CN")}/{intervalStats.total.toLocaleString("zh-CN")})
+              {chatIntervalStats.percent}%({chatIntervalStats.available.toLocaleString("zh-CN")}/{chatIntervalStats.total.toLocaleString("zh-CN")})
+            </span>
+            <span className="mx-2 text-gray-400">│</span>
+            <span>Video </span>
+            <span className={videoUsageColor}>{videoUsageBar}</span>
+            <span className="ml-1">
+              {videoIntervalStats.percent}%({videoIntervalStats.available.toLocaleString("zh-CN")}/{videoIntervalStats.total.toLocaleString("zh-CN")})
             </span>
             <span className="mx-2 text-gray-400">│</span>
             <span>⏱ {formatDuration(liveIntervalRemainMs)}</span>
             <span className="mx-2 text-gray-400">│</span>
             <span className={expireColor}>到期 {daysLeft} 天</span>
-            <button
-              type="button"
-              onClick={() => setExpanded((v) => !v)}
-              className="ml-3 rounded border border-gray-300 dark:border-zinc-700 px-2 py-0.5 text-[11px] hover:bg-gray-100 dark:hover:bg-zinc-800"
-            >
-              {expanded ? "收起" : "详细"}
-            </button>
+            <Button variant="default" size="compact-xs" className="ml-3" onClick={() => setExpanded((v) => !v)}>{expanded ? "收起" : "详细"}</Button>
             {loading && <span className="ml-2 text-gray-500">刷新中...</span>}
           </>
         )}
       </div>
 
-      {expanded && !error && active && (
-        <div className="border-t border-gray-200/80 dark:border-zinc-800 px-4 py-3">
-          <pre className="text-xs leading-6 text-gray-800 dark:text-gray-100 font-mono whitespace-pre-wrap">
-{`┌─────────────────────────────────────────────────────────────┐
-│ MiniMax Claude Code 使用状态                                │
-│                                                             │
-│ 当前模型: ${active.model_name}
-│ 时间窗口: ${new Date(active.start_time).toLocaleTimeString("zh-CN", { hour12: false })}-${new Date(active.end_time).toLocaleTimeString("zh-CN", { hour12: false })}(UTC+8)
-│ 剩余时间: ${formatDuration(liveIntervalRemainMs)}后重置
-│                                                             │
-│ 已用额度: ${usageBar} ${intervalStats.percent}%                               
-│      剩余: ${intervalStats.available.toLocaleString("zh-CN")}/${intervalStats.total.toLocaleString("zh-CN")} 次调用
-│      套餐到期: ${new Date(active.end_time).toLocaleDateString("zh-CN")}（还剩 ${daysLeft} 天）
-│                                                             │
-│ 周维度: ${buildProgressBar(weeklyStats.percent)} ${weeklyStats.percent}%                             
-│      周剩余: ${weeklyStats.available.toLocaleString("zh-CN")}/${weeklyStats.total.toLocaleString("zh-CN")} 次调用
-│      周重置: ${formatDuration(toLiveRemainsMs(active.weekly_remains_time, snapshot.fetchedAt, now))}
-│                                                             │
-│ 状态: ${intervalStats.percent >= 85 || daysLeft <= 3 ? "⚠ 关注使用" : "✓ 正常使用"}
-└─────────────────────────────────────────────────────────────┘`}
-          </pre>
-        </div>
+      {expanded && !error && chatRemain && (
+        <Stack className="border-t border-gray-200/80 dark:border-zinc-800 py-3 mt-2" gap={8}>
+          <Group gap={8}>
+            <Badge color="cyan" variant="light">聊天模型</Badge>
+            <Text size="xs">{chatRemain.model_name}</Text>
+          </Group>
+          <Text size="xs">周期窗口：{new Date(chatRemain.start_time).toLocaleString("zh-CN", { hour12: false })} - {new Date(chatRemain.end_time).toLocaleString("zh-CN", { hour12: false })}</Text>
+          <Text size="xs">Usage：{chatUsageBar} {chatIntervalStats.percent}%（{chatIntervalStats.available.toLocaleString("zh-CN")}/{chatIntervalStats.total.toLocaleString("zh-CN")}）</Text>
+          <Text size="xs">重置倒计时：{formatDuration(liveIntervalRemainMs)}</Text>
+          <Group gap={8} mt={4}>
+            <Badge color="grape" variant="light">视频模型</Badge>
+            <Text size="xs">{videoRemain?.model_name ?? appConfig.models.videoDefault}</Text>
+          </Group>
+          <Text size="xs">Usage：{videoUsageBar} {videoIntervalStats.percent}%（{videoIntervalStats.available.toLocaleString("zh-CN")}/{videoIntervalStats.total.toLocaleString("zh-CN")}）</Text>
+          <Text size="xs">到期：{expireAt > 0 ? new Date(expireAt).toLocaleDateString("zh-CN") : "-"}（还剩 {daysLeft} 天）</Text>
+        </Stack>
       )}
-    </div>
+    </Paper>
   );
 }

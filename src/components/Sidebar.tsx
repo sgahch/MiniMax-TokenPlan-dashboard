@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { MessageSquare, Mic, Video, Image as ImageIcon, Music, Settings } from "lucide-react";
+import { Badge, Paper, Stack, Text, UnstyledButton } from "@mantine/core";
 import SettingsModal from "./SettingsModal";
 
 const navItems = [
@@ -20,15 +21,17 @@ export default function Sidebar() {
 
   return (
     <>
-      <div className="flex flex-col w-72 bg-white/70 dark:bg-zinc-900/70 border-r border-white/80 dark:border-zinc-800 h-screen backdrop-blur-xl">
-        <div className="p-5 mb-3">
+      <Paper className="flex flex-col w-72 h-screen border-r border-white/80 dark:border-zinc-800 bg-white/75 dark:bg-zinc-900/75 backdrop-blur-xl pb-28" radius={0}>
+        <div className="p-5 mb-1">
           <h1 className="text-xl font-bold bg-gradient-to-r from-blue-600 via-indigo-500 to-violet-500 bg-clip-text text-transparent">
             MiniMax 多模态客户端
           </h1>
-          <p className="text-xs mt-1 text-gray-500 dark:text-zinc-400">多模态工作台</p>
+          <div className="mt-2">
+            <Badge variant="light" color="cyan">多模态工作台</Badge>
+          </div>
         </div>
 
-        <nav className="flex-1 px-3 space-y-1.5">
+        <Stack className="flex-1 px-3 py-2 gap-1.5">
           {navItems.map((item) => {
             const isActive = pathname === item.href;
             const Icon = item.icon;
@@ -47,18 +50,18 @@ export default function Sidebar() {
               </Link>
             );
           })}
-        </nav>
+        </Stack>
 
-        <div className="p-4 border-t border-white/80 dark:border-zinc-800">
-          <button
+        <div className="p-4 border-t border-white/80 dark:border-zinc-800 mt-auto">
+          <UnstyledButton
             onClick={() => setIsSettingsOpen(true)}
             className="flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-gray-700 hover:bg-white dark:text-gray-300 dark:hover:bg-zinc-800 transition-colors border border-transparent hover:border-gray-200 dark:hover:border-zinc-700"
           >
             <Settings className="w-5 h-5" />
-            <span>设置</span>
-          </button>
+            <Text size="sm" fw={500}>设置</Text>
+          </UnstyledButton>
         </div>
-      </div>
+      </Paper>
 
       {isSettingsOpen && <SettingsModal onClose={() => setIsSettingsOpen(false)} />}
     </>

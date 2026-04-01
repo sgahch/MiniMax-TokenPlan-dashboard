@@ -95,3 +95,30 @@ export const getExpireColorClass = (days: number) => {
   }
   return "text-emerald-500";
 };
+
+export const findModelRemain = (list: ModelRemain[], preferredModel: string) => {
+  if (list.length === 0) {
+    return undefined;
+  }
+  const target = preferredModel.trim().toLowerCase();
+  if (!target) {
+    return list[0];
+  }
+  const exact = list.find((item) => item.model_name.trim().toLowerCase() === target);
+  if (exact) {
+    return exact;
+  }
+  const rough = list.find((item) => item.model_name.trim().toLowerCase().includes(target.split(" ")[0]));
+  return rough ?? list[0];
+};
+
+export const getDaysLeft = (endTime: number) => {
+  if (!Number.isFinite(endTime)) {
+    return 0;
+  }
+  const ms = endTime - Date.now();
+  if (ms <= 0) {
+    return 0;
+  }
+  return Math.floor(ms / 86400000);
+};
