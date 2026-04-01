@@ -92,7 +92,6 @@ export default function TokenPlanStatusBar() {
           <span className="text-red-500">Token Plan 状态异常：{error}</span>
         ) : (
           <>
-            <span>MiniMax-M* </span>
             {minimaxMRemains.length === 0 ? (
               <span className="text-gray-500">暂无匹配模型</span>
             ) : (
@@ -103,7 +102,7 @@ export default function TokenPlanStatusBar() {
                 return (
                   <span key={item.model_name}>
                     {index > 0 && <span className="mx-2 text-gray-400">│</span>}
-                    <span className="mr-1">{item.model_name}</span>
+                    <span className="mr-1">{index === 0 ? item.model_name : `+ ${item.model_name}`}</span>
                     <span className={color}>{bar}</span>
                     <span className="ml-1">
                       {stats.percent}%({stats.available.toLocaleString("zh-CN")}/{stats.total.toLocaleString("zh-CN")})
@@ -114,14 +113,23 @@ export default function TokenPlanStatusBar() {
             )}
             <span className="mx-2 text-gray-400">│</span>
             <span>⏱ {formatDuration(liveIntervalRemainMs)}</span>
-            <Button variant="outline" size="sm" className="ml-3 h-6" onClick={() => setExpanded((v) => !v)}>{expanded ? "收起" : "详细"}</Button>
+            <Button variant="outline" size="sm" className="ml-3 h-6" onClick={() => setExpanded((v) => !v)}>
+              {expanded ? "收起" : "详细"}
+            </Button>
             {loading && <span className="ml-2 text-gray-500">刷新中...</span>}
           </>
         )}
       </div>
 
       {expanded && !error && snapshot.data.length > 0 && (
-        <div className="border-t border-gray-200/80 dark:border-zinc-800 py-3 mt-2 space-y-2 text-xs text-gray-700 dark:text-gray-200">
+        <div className="border-t border-gray-200/80 dark:border-zinc-800 pt-3 mt-2 text-xs text-gray-700 dark:text-gray-200">
+          <div className="flex items-center justify-between mb-2">
+            <span className="font-medium">/coding_plan/remains 详细</span>
+            <Button variant="outline" size="sm" className="h-6" onClick={() => setExpanded(false)}>
+              关闭
+            </Button>
+          </div>
+          <div className="max-h-[50vh] overflow-y-auto pr-1 space-y-2">
           {snapshot.data.map((item) => {
             const intervalStats = getUsageStats(item.current_interval_total_count, item.current_interval_usage_count);
             const weeklyStats = getUsageStats(item.current_weekly_total_count, item.current_weekly_usage_count);
@@ -151,6 +159,7 @@ export default function TokenPlanStatusBar() {
               </div>
             );
           })}
+          </div>
         </div>
       )}
     </div>
