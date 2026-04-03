@@ -22,7 +22,7 @@ export default function RootLayout({
       <body className={`${inter.className} bg-slate-100 dark:bg-zinc-950 text-black dark:text-white flex h-screen overflow-hidden`}>
         <AppProviders>
           <Sidebar />
-          <main className="flex-1 h-full overflow-y-auto p-4 md:p-5 pb-28">
+          <main className="flex-1 h-full overflow-y-auto p-4 md:p-5 pb-36">
             {children}
           </main>
           <TokenPlanStatusBar />

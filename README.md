@@ -37,6 +37,8 @@ MiniMax Token Plan Agent is a production-oriented multimodal client for MiniMax 
 - Prompt quick access with explicit replace and append actions instead of implicit overwrite
 - Settings navigation split into System, Prompt Management, and Skills with summary cards and searchable lists
 - Auto-resizing chat input with keyboard hints for send and newline actions
+- Additional bottom-safe spacing to avoid chat input hints overlapping the Token Plan status bar
+- Refined sidebar hierarchy with larger workspace badge, smaller navigation text, and lower-layer settings entry near the status bar
 - Manual refresh in the bottom quota bar for real-time Token Plan inspection
 
 ### Reliability and Architecture

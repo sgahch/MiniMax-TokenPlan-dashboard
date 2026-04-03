@@ -34,8 +34,8 @@ export default function Sidebar() {
             </button>
           </div>
           {!collapsed && (
-            <div className="flex justify-center">
-              <Badge className="px-4 py-1.5 text-sm font-semibold tracking-wide">MiniMax多模态工作台</Badge>
+            <div className="flex justify-start -mt-1">
+              <Badge className="px-3 py-1.5 text-base font-bold tracking-wide">MiniMax多模态工作台</Badge>
             </div>
           )}
         </div>
@@ -49,7 +49,7 @@ export default function Sidebar() {
                 key={item.name}
                 href={item.href}
                 title={collapsed ? item.name : undefined}
-                className={`flex items-center px-3 py-3 rounded-xl transition-all border ${collapsed ? "justify-center" : "gap-3"} ${
+                className={`flex items-center px-3 py-2.5 text-[13px] rounded-xl transition-all border ${collapsed ? "justify-center" : "gap-3"} ${
                   isActive
                     ? "bg-gradient-to-r from-blue-500/20 to-indigo-500/20 text-blue-700 dark:text-blue-300 border-blue-200/80 dark:border-blue-700/60 shadow-sm font-medium"
                     : "text-gray-700 hover:bg-white/80 dark:text-gray-300 dark:hover:bg-zinc-800 border-transparent"
@@ -64,7 +64,7 @@ export default function Sidebar() {
 
       </aside>
 
-      <div className={`fixed bottom-16 z-40 transition-all ${collapsed ? "left-1.5 w-[3.25rem]" : "left-3 w-[13.5rem]"}`}>
+      <div className={`fixed bottom-20 z-20 transition-all ${collapsed ? "left-1.5 w-[3.25rem]" : "left-3 w-[13.5rem]"}`}>
         <button
           onClick={() => setIsSettingsOpen(true)}
           title="设置"

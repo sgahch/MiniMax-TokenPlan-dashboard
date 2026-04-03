@@ -251,7 +251,7 @@ export default function ChatPage() {
               <div ref={messagesEndRef} />
             </div>
 
-            <div className="p-4 bg-white/70 dark:bg-zinc-900/60 border-t border-white/80 dark:border-zinc-800">
+            <div className="p-4 pb-6 bg-white/70 dark:bg-zinc-900/60 border-t border-white/80 dark:border-zinc-800">
               <div className="max-w-3xl mx-auto relative space-y-2">
                 <PromptQuickAccess scope="chat" value={input} onUsePrompt={setInput} onAppendPrompt={appendInput} />
                 <div className="relative flex items-end gap-2">
@@ -283,7 +283,7 @@ export default function ChatPage() {
                   <Send className="w-5 h-5" />
                 </button>
                 </div>
-                <div className="flex items-center justify-between px-1 text-xs text-slate-500 dark:text-zinc-400">
+                <div className="flex items-center justify-between px-1 pt-1 text-xs text-slate-500 dark:text-zinc-400">
                   <span>Enter 发送，Shift + Enter 换行</span>
                   <span>{input.trim().length} 字符</span>
                 </div>
