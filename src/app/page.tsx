@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useSettingsStore } from "@/store/useSettingsStore";
 import { useChatStore } from "@/store/useChatStore";
 import { appConfig } from "@/config/appConfig";
@@ -11,7 +11,7 @@ import PromptQuickAccess from "@/components/PromptQuickAccess";
 const MAX_CONTEXT_MESSAGES = 16;
 
 export default function ChatPage() {
-  const { apiKey } = useSettingsStore();
+  const { apiKey, mcpServers } = useSettingsStore();
   const {
     sessions,
     activeSessionId,
@@ -25,6 +25,8 @@ export default function ChatPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [sessionListCollapsed, setSessionListCollapsed] = useState(false);
   const [copiedMessageId, setCopiedMessageId] = useState("");
+  const [mcpEnabled, setMcpEnabled] = useState(false);
+  const [selectedMcpServerIds, setSelectedMcpServerIds] = useState<string[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -49,6 +51,28 @@ export default function ChatPage() {
   const activeSession = sessions.find(s => s.id === activeSessionId) || sessions[0];
   const activeMessageCount = activeSession?.messages.length ?? 0;
   const contextMessageCount = Math.min(activeMessageCount, MAX_CONTEXT_MESSAGES);
+  const enabledMcpServers = useMemo(
+    () => mcpServers.filter((item) => item.enabled),
+    [mcpServers]
+  );
+  const selectedMcpServers = useMemo(
+    () => enabledMcpServers.filter((item) => selectedMcpServerIds.includes(item.id)),
+    [enabledMcpServers, selectedMcpServerIds]
+  );
+
+  useEffect(() => {
+    setSelectedMcpServerIds((current) => {
+      const availableIds = enabledMcpServers.map((item) => item.id);
+      const filtered = current.filter((id) => availableIds.includes(id));
+      if (filtered.length > 0 || availableIds.length === 0) {
+        return filtered;
+      }
+      return availableIds;
+    });
+    if (enabledMcpServers.length === 0) {
+      setMcpEnabled(false);
+    }
+  }, [enabledMcpServers]);
 
   const appendInput = (value: string) => {
     setInput((prev) => prev.trim() ? `${prev.trim()}\n${value}` : value);
@@ -72,8 +96,15 @@ export default function ChatPage() {
     }
   };
 
+  const toggleMcpServer = (id: string) => {
+    setSelectedMcpServerIds((current) =>
+      current.includes(id) ? current.filter((item) => item !== id) : [...current, id]
+    );
+  };
+
   const handleSend = async () => {
     if (!input.trim() || !apiKey || !activeSession) return;
+    if (mcpEnabled && selectedMcpServers.length === 0) return;
 
     const userMsg = input.trim();
     setInput("");
@@ -83,6 +114,18 @@ export default function ChatPage() {
 
     try {
       const recentMessages = activeSession.messages.slice(-MAX_CONTEXT_MESSAGES);
+      const mcpContextMessage =
+        mcpEnabled && selectedMcpServers.length > 0
+          ? {
+              role: "system" as const,
+              content: `以下是本次对话已启用的 MCP 服务，请在需要时优先结合这些能力生成回答：\n${selectedMcpServers
+                .map((item, index) => {
+                  const access = item.endpoint || [item.command, ...(item.args || [])].filter(Boolean).join(" ");
+                  return `${index + 1}. 名称：${item.name}\n   访问方式：${access}${item.description ? `\n   描述：${item.description}` : ""}`;
+                })
+                .join("\n")}`,
+            }
+          : null;
       const data = await apiRequest<{ choices?: Array<{ message?: { content?: string } }> }>({
         path: "/text/chatcompletion_v2",
         method: "POST",
@@ -91,6 +134,7 @@ export default function ChatPage() {
         body: {
           model: appConfig.models.chatDefault,
           messages: [
+            ...(mcpContextMessage ? [mcpContextMessage] : []),
             ...recentMessages.map((m) => ({
               role: m.role === "bot" ? "assistant" : "user",
               content: m.content,
@@ -188,6 +232,9 @@ export default function ChatPage() {
                     <span className="rounded-full border border-slate-200 px-3 py-1 text-slate-600 dark:border-zinc-700 dark:text-zinc-300">
                       会话数：{sessions.length}
                     </span>
+                    <span className="rounded-full border border-slate-200 px-3 py-1 text-slate-600 dark:border-zinc-700 dark:text-zinc-300">
+                      MCP：{mcpEnabled && selectedMcpServers.length > 0 ? `已启用 ${selectedMcpServers.length} 个` : "未启用"}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -254,6 +301,43 @@ export default function ChatPage() {
             <div className="p-4 pb-6 bg-white/70 dark:bg-zinc-900/60 border-t border-white/80 dark:border-zinc-800">
               <div className="max-w-3xl mx-auto relative space-y-2">
                 <PromptQuickAccess scope="chat" value={input} onUsePrompt={setInput} onAppendPrompt={appendInput} />
+                <div className="rounded-xl border border-slate-200 bg-white/80 px-3 py-2 text-xs dark:border-zinc-700 dark:bg-zinc-900/70">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setMcpEnabled((value) => !value)}
+                      disabled={enabledMcpServers.length === 0}
+                      className={`rounded-lg border px-2.5 py-1 transition-colors ${
+                        mcpEnabled
+                          ? "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-900/30 dark:text-blue-300"
+                          : "border-slate-200 bg-white text-slate-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
+                      } disabled:cursor-not-allowed disabled:opacity-50`}
+                    >
+                      {mcpEnabled ? "MCP 已启用" : "MCP 已关闭"}
+                    </button>
+                    {enabledMcpServers.length === 0 ? (
+                      <span className="text-slate-500 dark:text-zinc-400">请先在设置中心的 MCP 管理里添加并启用服务</span>
+                    ) : (
+                      enabledMcpServers.map((server) => (
+                        <button
+                          key={server.id}
+                          type="button"
+                          onClick={() => toggleMcpServer(server.id)}
+                          className={`rounded-lg border px-2.5 py-1 transition-colors ${
+                            selectedMcpServerIds.includes(server.id)
+                              ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300"
+                              : "border-slate-200 bg-white text-slate-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
+                          }`}
+                        >
+                          {server.name}
+                        </button>
+                      ))
+                    )}
+                  </div>
+                  {mcpEnabled && enabledMcpServers.length > 0 && selectedMcpServers.length === 0 && (
+                    <div className="mt-2 text-amber-600 dark:text-amber-300">请至少选择一个 MCP 服务</div>
+                  )}
+                </div>
                 <div className="relative flex items-end gap-2">
                 {!apiKey && (
                   <div className="absolute -top-10 left-0 text-sm text-red-500 bg-red-50 dark:bg-red-900/20 px-3 py-1.5 rounded-lg border border-red-200 dark:border-red-900/50">
@@ -277,7 +361,7 @@ export default function ChatPage() {
                 />
                 <button
                   onClick={handleSend}
-                  disabled={!input.trim() || !apiKey || isLoading}
+                  disabled={!input.trim() || !apiKey || isLoading || (mcpEnabled && selectedMcpServers.length === 0)}
                   className="p-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-2xl hover:from-blue-700 hover:to-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shrink-0 shadow-sm"
                 >
                   <Send className="w-5 h-5" />

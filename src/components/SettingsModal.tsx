@@ -23,7 +23,20 @@ interface SettingsModalProps {
 }
 
 export default function SettingsModal({ onClose }: SettingsModalProps) {
-  const { apiKey, rememberApiKey, themeMode, setApiKey, setRememberApiKey, setThemeMode, clearApiKey } = useSettingsStore();
+  const {
+    apiKey,
+    rememberApiKey,
+    themeMode,
+    mcpServers,
+    setApiKey,
+    setRememberApiKey,
+    setThemeMode,
+    addMcpServer,
+    addMcpServerConfig,
+    removeMcpServer,
+    setMcpServerEnabled,
+    clearApiKey,
+  } = useSettingsStore();
   const { prompts, addPrompt, updatePrompt, removePrompt } = usePromptStore();
   const {
     repositories,
@@ -34,7 +47,7 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
     removeSkill,
     setSkillApplied,
   } = useSkillsStore();
-  const [activeMenu, setActiveMenu] = useState<"system" | "prompt" | "skills">("system");
+  const [activeMenu, setActiveMenu] = useState<"system" | "prompt" | "skills" | "mcp">("system");
   const [localKey, setLocalKey] = useState(apiKey);
   const [rememberLocal, setRememberLocal] = useState(rememberApiKey);
   const [themeLocal, setThemeLocal] = useState(themeMode);
@@ -50,6 +63,11 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
   const [editingPromptId, setEditingPromptId] = useState("");
   const [editingPromptTheme, setEditingPromptTheme] = useState("");
   const [editingPromptDetail, setEditingPromptDetail] = useState("");
+  const [mcpName, setMcpName] = useState("");
+  const [mcpEndpoint, setMcpEndpoint] = useState("");
+  const [mcpDescription, setMcpDescription] = useState("");
+  const [mcpJsonText, setMcpJsonText] = useState("");
+  const [mcpImportFeedback, setMcpImportFeedback] = useState("");
 
   const handleSave = () => {
     setRememberApiKey(rememberLocal);
@@ -81,6 +99,7 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
     { key: "system" as const, label: "系统设置", description: "主题、密钥与持久化策略" },
     { key: "prompt" as const, label: "提示词管理", description: "按模块维护可复用提示词" },
     { key: "skills" as const, label: "Skills 管理", description: "仓库、能力与应用状态" },
+    { key: "mcp" as const, label: "MCP 管理", description: "维护 MCP 服务并控制启用状态" },
   ];
   const scopedPrompts = useMemo(
     () => prompts.filter((item) => item.scope === promptScope).sort((a, b) => b.createdAt - a.createdAt),
@@ -103,6 +122,11 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
   );
   const scopeThemeCount = new Set(scopedPrompts.map((item) => item.theme || "默认主题")).size;
   const appliedSkillsCount = skills.filter((item) => item.applied).length;
+  const enabledMcpCount = mcpServers.filter((item) => item.enabled).length;
+  const sortedMcpServers = useMemo(
+    () => [...mcpServers].sort((a, b) => b.createdAt - a.createdAt),
+    [mcpServers]
+  );
   const maskedApiKey = localKey ? `${localKey.slice(0, 4)}${localKey.length > 8 ? "••••" : ""}${localKey.slice(-4)}` : "未配置";
   const systemSummaryItems = [
     { label: "密钥状态", value: localKey ? "已配置" : "未配置" },
@@ -121,6 +145,68 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
     setEditingPromptId("");
     setEditingPromptTheme("");
     setEditingPromptDetail("");
+  };
+
+  const importMcpJson = () => {
+    const raw = mcpJsonText.trim();
+    if (!raw) {
+      setMcpImportFeedback("请输入 MCP JSON");
+      return;
+    }
+    const normalized = raw.replace(/```json|```/gi, "").trim();
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(normalized);
+    } catch {
+      try {
+        parsed = JSON.parse(normalized.replace(/\\/g, "\\\\"));
+      } catch {
+        setMcpImportFeedback("JSON 解析失败，请检查格式（Windows 路径请使用 \\\\）");
+        return;
+      }
+    }
+    if (!parsed || typeof parsed !== "object") {
+      setMcpImportFeedback("JSON 结构不正确");
+      return;
+    }
+    const source = (parsed as { mcpServers?: unknown }).mcpServers;
+    if (!source || typeof source !== "object" || Array.isArray(source)) {
+      setMcpImportFeedback("缺少 mcpServers 对象");
+      return;
+    }
+    const entries = Object.entries(source as Record<string, unknown>);
+    if (entries.length === 0) {
+      setMcpImportFeedback("mcpServers 为空");
+      return;
+    }
+    let importedCount = 0;
+    entries.forEach(([name, value]) => {
+      if (!value || typeof value !== "object" || Array.isArray(value)) {
+        return;
+      }
+      const config = value as {
+        command?: unknown;
+        args?: unknown;
+        env?: unknown;
+        endpoint?: unknown;
+        description?: unknown;
+      };
+      const args = Array.isArray(config.args) ? config.args.map((item) => `${item}`) : [];
+      const env =
+        config.env && typeof config.env === "object" && !Array.isArray(config.env)
+          ? Object.fromEntries(Object.entries(config.env as Record<string, unknown>).map(([k, v]) => [k, `${v}`]))
+          : {};
+      addMcpServerConfig({
+        name,
+        command: typeof config.command === "string" ? config.command : "",
+        args,
+        env,
+        endpoint: typeof config.endpoint === "string" ? config.endpoint : "",
+        description: typeof config.description === "string" ? config.description : "",
+      });
+      importedCount += 1;
+    });
+    setMcpImportFeedback(`已处理 ${importedCount} 个 MCP 服务`);
   };
 
   return (
@@ -162,6 +248,7 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
                 <div>Prompt 总数：{prompts.length}</div>
                 <div>仓库数量：{repositories.length}</div>
                 <div>已应用 Skills：{appliedSkillsCount}</div>
+                  <div>MCP 服务：{enabledMcpCount}/{mcpServers.length}</div>
               </div>
             </div>
           </div>
@@ -456,6 +543,104 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
                     );
                   })}
                   {scopedSkills.length === 0 && <div className="text-xs text-slate-500 dark:text-zinc-400">暂无 Skill</div>}
+                </div>
+              </div>
+            )}
+
+            {activeMenu === "mcp" && (
+              <div className="space-y-4 rounded-2xl border border-slate-200 p-5 dark:border-zinc-800">
+                <div>
+                  <div className="text-base font-medium">MCP 服务管理</div>
+                  <div className="mt-1 text-sm text-slate-500 dark:text-zinc-400">快速添加、删除并开关 MCP 服务，文本对话页可按会话启用。</div>
+                </div>
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4 dark:border-zinc-800 dark:bg-zinc-900/70">
+                    <div className="text-xs text-slate-500 dark:text-zinc-400">服务总数</div>
+                    <div className="mt-1 text-sm font-medium text-slate-900 dark:text-zinc-100">{mcpServers.length}</div>
+                  </div>
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4 dark:border-zinc-800 dark:bg-zinc-900/70">
+                    <div className="text-xs text-slate-500 dark:text-zinc-400">已启用</div>
+                    <div className="mt-1 text-sm font-medium text-slate-900 dark:text-zinc-100">{enabledMcpCount}</div>
+                  </div>
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4 dark:border-zinc-800 dark:bg-zinc-900/70">
+                    <div className="text-xs text-slate-500 dark:text-zinc-400">未启用</div>
+                    <div className="mt-1 text-sm font-medium text-slate-900 dark:text-zinc-100">{mcpServers.length - enabledMcpCount}</div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                  <Input value={mcpName} onChange={(e) => setMcpName(e.currentTarget.value)} placeholder="MCP 名称" />
+                  <Input value={mcpEndpoint} onChange={(e) => setMcpEndpoint(e.currentTarget.value)} placeholder="MCP 地址（例如 http://localhost:3001/mcp）" />
+                </div>
+                <Input value={mcpDescription} onChange={(e) => setMcpDescription(e.currentTarget.value)} placeholder="描述（可选）" />
+                <div className="flex justify-end">
+                  <Button
+                    type="button"
+                    disabled={!mcpName.trim() || !mcpEndpoint.trim()}
+                    onClick={() => {
+                      addMcpServer(mcpName, mcpEndpoint, mcpDescription);
+                      if (mcpName.trim() && mcpEndpoint.trim()) {
+                        setMcpName("");
+                        setMcpEndpoint("");
+                        setMcpDescription("");
+                      }
+                    }}
+                  >
+                    添加 MCP
+                  </Button>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="mcp-json">MCP JSON 导入</Label>
+                  <textarea
+                    id="mcp-json"
+                    value={mcpJsonText}
+                    onChange={(e) => setMcpJsonText(e.currentTarget.value)}
+                    placeholder='{"mcpServers":{"MiniMax":{"command":"uvx","args":["minimax-coding-plan-mcp"],"env":{"MINIMAX_API_KEY":"***","MINIMAX_MCP_BASE_PATH":"E:\\\\下载"}}}}'
+                    className="min-h-36 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
+                  />
+                  <div className="flex items-center justify-between">
+                    <div className="text-xs text-slate-500 dark:text-zinc-400">支持 {`mcpServers.<name>.command/args/env`} 结构</div>
+                    <Button type="button" variant="outline" onClick={importMcpJson}>导入 JSON</Button>
+                  </div>
+                  {mcpImportFeedback && <div className="text-xs text-slate-600 dark:text-zinc-400">{mcpImportFeedback}</div>}
+                </div>
+
+                <div className="max-h-72 space-y-2 overflow-y-auto">
+                  {sortedMcpServers.map((server) => (
+                    <div key={server.id} className="rounded-xl border border-slate-200 px-3 py-3 dark:border-zinc-800">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="truncate text-sm font-medium text-slate-800 dark:text-zinc-200">{server.name}</div>
+                          <div className="truncate text-xs text-slate-500 dark:text-zinc-400">
+                            {server.endpoint || [server.command, ...(server.args || [])].filter(Boolean).join(" ")}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Switch
+                            checked={server.enabled}
+                            onCheckedChange={(checked) => setMcpServerEnabled(server.id, checked)}
+                          />
+                          <Button type="button" variant="outline" size="sm" onClick={() => removeMcpServer(server.id)}>
+                            删除
+                          </Button>
+                        </div>
+                      </div>
+                      {server.description && (
+                        <div className="mt-2 text-xs text-slate-600 dark:text-zinc-400 whitespace-pre-wrap break-words">{server.description}</div>
+                      )}
+                      {server.env && Object.keys(server.env).length > 0 && (
+                        <div className="mt-2 text-xs text-slate-500 dark:text-zinc-400">
+                          环境变量：{Object.keys(server.env).join("、")}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                  {sortedMcpServers.length === 0 && (
+                    <div className="rounded-xl border border-dashed border-slate-300 px-3 py-5 text-center text-xs text-slate-500 dark:border-zinc-700 dark:text-zinc-400">
+                      暂无 MCP 服务
+                    </div>
+                  )}
                 </div>
               </div>
             )}
