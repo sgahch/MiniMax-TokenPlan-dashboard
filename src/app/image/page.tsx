@@ -8,6 +8,7 @@ import { appConfig } from "@/config/appConfig";
 import { ImageIcon, Loader2, PlayCircle, Clock, AlertCircle, CheckCircle2, ChevronDown, ChevronUp } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
 import { ApiError, apiRequest } from "@/lib/apiClient";
+import PromptQuickAccess from "@/components/PromptQuickAccess";
 
 type ImageGenerateMode = "text_to_image" | "subject_reference";
 
@@ -81,6 +82,7 @@ export default function ImagePage() {
         path: "/image_generation",
         method: "POST",
         apiKey,
+        timeoutMs: 120000,
         body,
       });
 
@@ -131,6 +133,7 @@ export default function ImagePage() {
         )}
 
         <div className="bg-white/80 dark:bg-zinc-900/80 rounded-2xl p-6 border border-gray-200/80 dark:border-zinc-700 space-y-4 shadow-sm">
+          <PromptQuickAccess scope="image" value={prompt} onUsePrompt={setPrompt} />
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               生成模式

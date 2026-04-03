@@ -14,6 +14,7 @@ import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import PromptQuickAccess from "@/components/PromptQuickAccess";
 
 type VideoGenerateMode = "text_to_video" | "image_to_video" | "start_end_to_video" | "subject_reference";
 const TEXT_TO_VIDEO_MODELS = ["MiniMax-Hailuo-02", "MiniMax-Hailuo-2.3", "MiniMax-Hailuo-2.3-Fast"];
@@ -86,6 +87,7 @@ export default function VideoPage() {
     const queryData = await apiRequest<{ status?: string; file_id?: string; error_message?: string }>({
       path: `/query/video_generation?task_id=${encodeURIComponent(task.id)}`,
       apiKey: key,
+      timeoutMs: 120000,
     });
 
     if (queryData.status === "Success") {
@@ -108,7 +110,7 @@ export default function VideoPage() {
     apiKey,
     tasks,
     type: "video",
-    intervalMs: 5000,
+    intervalMs: 8000,
     queryTask: queryVideoTask,
     updateTask,
     autoExpand,
@@ -257,6 +259,7 @@ export default function VideoPage() {
         path: "/video_generation",
         method: "POST",
         apiKey,
+        timeoutMs: 120000,
         body,
       });
 
@@ -306,6 +309,7 @@ export default function VideoPage() {
             <CardDescription>选择模式、模型和参数后提交生成任务</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
+            <PromptQuickAccess scope="video" value={prompt} onUsePrompt={setPrompt} />
             <div className="space-y-2">
               <Label>生成模式</Label>
               <Select value={mode} onChange={(e) => setMode(e.target.value as VideoGenerateMode)} disabled={isSubmitting || !apiKey}>

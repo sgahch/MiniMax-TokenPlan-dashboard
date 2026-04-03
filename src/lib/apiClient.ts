@@ -1,6 +1,6 @@
 import { appConfig } from "@/config/appConfig";
 
-const DEFAULT_TIMEOUT = 30000;
+const DEFAULT_TIMEOUT = 120000;
 
 export class ApiError extends Error {
   status?: number;

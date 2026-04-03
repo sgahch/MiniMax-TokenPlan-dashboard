@@ -7,6 +7,7 @@ import { appConfig } from "@/config/appConfig";
 import { Music, Loader2, PlayCircle, Clock, AlertCircle, CheckCircle2 } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
 import { ApiError, apiRequest } from "@/lib/apiClient";
+import PromptQuickAccess from "@/components/PromptQuickAccess";
 
 export default function MusicPage() {
   const { apiKey } = useSettingsStore();
@@ -40,6 +41,7 @@ export default function MusicPage() {
         path: "/music_generation",
         method: "POST",
         apiKey,
+        timeoutMs: 120000,
         body: {
           model: appConfig.models.musicDefault,
           prompt: prompt,
@@ -99,6 +101,7 @@ export default function MusicPage() {
         )}
 
         <div className="bg-white/80 dark:bg-zinc-900/80 rounded-2xl p-6 border border-gray-200/80 dark:border-zinc-700 space-y-4 shadow-sm">
+          <PromptQuickAccess scope="music" value={prompt} onUsePrompt={setPrompt} />
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               音乐风格 (Prompt) *

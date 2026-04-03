@@ -7,6 +7,7 @@ import { appConfig } from "@/config/appConfig";
 import { Mic, Loader2, PlayCircle, Clock, AlertCircle, CheckCircle2, ChevronDown, ChevronUp } from "lucide-react";
 import { ApiError, apiRequest } from "@/lib/apiClient";
 import { resolveFileDownloadUrl, useTaskPolling } from "@/lib/taskPolling";
+import PromptQuickAccess from "@/components/PromptQuickAccess";
 
 export default function VoicePage() {
   const { apiKey } = useSettingsStore();
@@ -17,7 +18,6 @@ export default function VoicePage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
 
-  // 展开状态管理
   const [expandedTasks, setExpandedTasks] = useState<Record<string, boolean>>({});
 
   const toggleTask = (id: string) => {
@@ -65,7 +65,7 @@ export default function VoicePage() {
     apiKey,
     tasks,
     type: "voice",
-    intervalMs: 3000,
+    intervalMs: 6000,
     queryTask: queryVoiceTask,
     updateTask,
     autoExpand,
@@ -82,6 +82,7 @@ export default function VoicePage() {
         path: "/t2a_async_v2",
         method: "POST",
         apiKey,
+      timeoutMs: 120000,
         body: {
           model: appConfig.models.voiceModel,
           text: text,
@@ -138,6 +139,7 @@ export default function VoicePage() {
         )}
 
         <div className="bg-white/80 dark:bg-zinc-900/80 rounded-2xl p-6 border border-gray-200/80 dark:border-zinc-700 space-y-4 shadow-sm">
+          <PromptQuickAccess scope="voice" value={text} onUsePrompt={setText} />
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               待合成文本 *

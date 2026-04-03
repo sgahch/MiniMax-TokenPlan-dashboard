@@ -59,7 +59,7 @@ export function useTaskPolling({
                 }
               }
             } catch {
-              updateTask(task.id, { status: "Fail", errorMessage: "任务查询失败，请稍后重试" });
+              updateTask(task.id, { status: task.status });
             }
           })
         );
@@ -82,6 +82,7 @@ export async function resolveFileDownloadUrl(fileId: string, apiKey: string) {
   const fileData = await apiRequest<{ file?: { download_url?: string } }>({
     path: `/files/retrieve?file_id=${encodeURIComponent(fileId)}`,
     apiKey,
+    timeoutMs: 120000,
   });
   return fileData.file?.download_url;
 }

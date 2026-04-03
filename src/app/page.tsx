@@ -6,6 +6,7 @@ import { useChatStore } from "@/store/useChatStore";
 import { appConfig } from "@/config/appConfig";
 import { Send, Bot, User, PlusCircle, MessageSquare, Trash2 } from "lucide-react";
 import { apiRequest, ApiError } from "@/lib/apiClient";
+import PromptQuickAccess from "@/components/PromptQuickAccess";
 
 const MAX_CONTEXT_MESSAGES = 16;
 
@@ -24,14 +25,12 @@ export default function ChatPage() {
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // 初始化时如果没有会话则创建一个
   useEffect(() => {
     if (sessions.length === 0) {
       createSession();
     }
   }, [sessions.length, createSession]);
 
-  // 自动滚动到底部
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [sessions, activeSessionId, isLoading]);
@@ -44,7 +43,6 @@ export default function ChatPage() {
     const userMsg = input.trim();
     setInput("");
 
-    // 添加用户消息到 store
     addMessage(activeSession.id, { role: "user", content: userMsg });
     setIsLoading(true);
 
@@ -54,6 +52,7 @@ export default function ChatPage() {
         path: "/text/chatcompletion_v2",
         method: "POST",
         apiKey,
+        timeoutMs: 120000,
         body: {
           model: appConfig.models.chatDefault,
           messages: [
@@ -173,7 +172,9 @@ export default function ChatPage() {
             </div>
 
             <div className="p-4 bg-white/70 dark:bg-zinc-900/60 border-t border-white/80 dark:border-zinc-800">
-              <div className="max-w-3xl mx-auto relative flex items-end gap-2">
+              <div className="max-w-3xl mx-auto relative space-y-2">
+                <PromptQuickAccess scope="chat" value={input} onUsePrompt={setInput} />
+                <div className="relative flex items-end gap-2">
                 {!apiKey && (
                   <div className="absolute -top-10 left-0 text-sm text-red-500 bg-red-50 dark:bg-red-900/20 px-3 py-1.5 rounded-lg border border-red-200 dark:border-red-900/50">
                     请先在左下角设置中配置 API Key
@@ -200,6 +201,7 @@ export default function ChatPage() {
                 >
                   <Send className="w-5 h-5" />
                 </button>
+                </div>
               </div>
             </div>
           </>

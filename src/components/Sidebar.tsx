@@ -21,7 +21,7 @@ export default function Sidebar() {
 
   return (
     <>
-      <aside className="flex flex-col w-72 h-screen border-r border-white/80 dark:border-zinc-800 bg-white/75 dark:bg-zinc-900/75 backdrop-blur-xl pb-28">
+      <aside className="flex flex-col w-72 h-screen border-r border-white/80 dark:border-zinc-800 bg-white/75 dark:bg-zinc-900/75 backdrop-blur-xl">
         <div className="p-5 mb-1">
           <h1 className="text-xl font-bold bg-gradient-to-r from-blue-600 via-indigo-500 to-violet-500 bg-clip-text text-transparent">
             MiniMax 多模态客户端
@@ -52,18 +52,19 @@ export default function Sidebar() {
           })}
         </div>
 
-        <div className="p-4 border-t border-white/80 dark:border-zinc-800 mt-auto">
-          <button
-            onClick={() => setIsSettingsOpen(true)}
-            className="group flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-gray-700 hover:bg-white dark:text-gray-300 dark:hover:bg-zinc-800 transition-colors border border-transparent hover:border-gray-200 dark:hover:border-zinc-700"
-          >
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-slate-700 transition-colors group-hover:bg-sky-100 group-hover:text-sky-700 dark:bg-zinc-800 dark:text-zinc-300 dark:group-hover:bg-sky-900/40 dark:group-hover:text-sky-300">
-              <Settings className="h-4 w-4" />
-            </span>
-            <span className="text-sm font-medium">设置</span>
-          </button>
-        </div>
       </aside>
+
+      <div className="fixed left-4 bottom-16 z-40 w-64">
+        <button
+          onClick={() => setIsSettingsOpen(true)}
+          className="group flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-gray-700 bg-white/85 hover:bg-white dark:bg-zinc-900/90 dark:text-gray-300 dark:hover:bg-zinc-900 transition-colors border border-gray-200/80 dark:border-zinc-700 shadow-sm"
+        >
+          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-slate-700 transition-colors group-hover:bg-sky-100 group-hover:text-sky-700 dark:bg-zinc-800 dark:text-zinc-300 dark:group-hover:bg-sky-900/40 dark:group-hover:text-sky-300">
+            <Settings className="h-4 w-4" />
+          </span>
+          <span className="text-sm font-medium">设置</span>
+        </button>
+      </div>
 
       {isSettingsOpen && <SettingsModal onClose={() => setIsSettingsOpen(false)} />}
     </>
