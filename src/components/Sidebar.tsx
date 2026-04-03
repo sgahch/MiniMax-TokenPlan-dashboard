@@ -22,14 +22,9 @@ export default function Sidebar() {
 
   return (
     <>
-      <aside className={`flex flex-col h-screen border-r border-white/80 dark:border-zinc-800 bg-white/75 dark:bg-zinc-900/75 backdrop-blur-xl transition-all ${collapsed ? "w-20" : "w-72"}`}>
-        <div className={`p-4 mb-1 ${collapsed ? "space-y-2" : ""}`}>
-          <div className={`flex items-center ${collapsed ? "justify-center" : "justify-between gap-2"}`}>
-            {!collapsed && (
-              <h1 className="text-lg font-bold bg-gradient-to-r from-blue-600 via-indigo-500 to-violet-500 bg-clip-text text-transparent">
-                MiniMax多模态工作台
-              </h1>
-            )}
+      <aside className={`flex flex-col h-screen border-r border-white/80 dark:border-zinc-800 bg-white/75 dark:bg-zinc-900/75 backdrop-blur-xl transition-all ${collapsed ? "w-16" : "w-60"}`}>
+        <div className={`p-3 mb-1 ${collapsed ? "space-y-2" : "space-y-3"}`}>
+          <div className={`flex items-center ${collapsed ? "justify-center" : "justify-end"}`}>
             <button
               type="button"
               onClick={() => setCollapsed((v) => !v)}
@@ -39,13 +34,13 @@ export default function Sidebar() {
             </button>
           </div>
           {!collapsed && (
-            <div className="mt-2">
-              <Badge>MiniMax多模态工作台</Badge>
+            <div className="flex justify-center">
+              <Badge className="px-4 py-1.5 text-sm font-semibold tracking-wide">MiniMax多模态工作台</Badge>
             </div>
           )}
         </div>
 
-        <div className="flex-1 px-3 py-2 space-y-1.5">
+        <div className="flex-1 px-2.5 py-2 space-y-1.5">
           {navItems.map((item) => {
             const isActive = pathname === item.href;
             const Icon = item.icon;
@@ -69,7 +64,7 @@ export default function Sidebar() {
 
       </aside>
 
-      <div className={`fixed bottom-16 z-40 transition-all ${collapsed ? "left-2 w-16" : "left-4 w-64"}`}>
+      <div className={`fixed bottom-16 z-40 transition-all ${collapsed ? "left-1.5 w-[3.25rem]" : "left-3 w-[13.5rem]"}`}>
         <button
           onClick={() => setIsSettingsOpen(true)}
           title="设置"

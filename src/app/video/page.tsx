@@ -35,7 +35,7 @@ export default function VideoPage() {
   const [mode, setMode] = useState<VideoGenerateMode>("text_to_video");
   const [model, setModel] = useState(appConfig.models.videoDefault);
   const [duration, setDuration] = useState(6);
-  const [resolution, setResolution] = useState("1080P");
+  const [resolution, setResolution] = useState("768P");
   const [firstFrameImage, setFirstFrameImage] = useState("");
   const [lastFrameImage, setLastFrameImage] = useState("");
   const [subjectReferenceImage, setSubjectReferenceImage] = useState("");
@@ -343,8 +343,8 @@ export default function VideoPage() {
               <div className="space-y-2">
                 <Label>分辨率</Label>
                 <Select value={resolution} onChange={(e) => setResolution(e.target.value)} disabled={isSubmitting || !apiKey}>
-                  <option value="768P">768P</option>
-                  <option value="1080P">1080P</option>
+                  <option value="768P">768p</option>
+                  <option value="1080P">1080p</option>
                 </Select>
               </div>
             </div>

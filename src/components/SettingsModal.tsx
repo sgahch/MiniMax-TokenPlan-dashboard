@@ -77,18 +77,18 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-h-[85vh] overflow-y-auto max-w-5xl">
-        <DialogHeader>
-          <DialogTitle>设置</DialogTitle>
+      <DialogContent className="max-h-[90vh] w-[min(96vw,78rem)] max-w-6xl overflow-hidden p-0">
+        <DialogHeader className="border-b border-slate-200 px-8 py-6 dark:border-zinc-800">
+          <DialogTitle className="text-2xl">设置</DialogTitle>
           <DialogDescription>支持系统设置、提示词管理与 Skills 能力管理。</DialogDescription>
         </DialogHeader>
 
-        <div className="grid grid-cols-1 md:grid-cols-[220px_1fr] gap-4">
-          <div className="rounded-xl border border-slate-200 dark:border-zinc-800 p-2 space-y-1 h-fit">
+        <div className="grid max-h-[calc(90vh-9rem)] grid-cols-1 gap-5 overflow-hidden px-8 py-6 md:grid-cols-[240px_1fr]">
+          <div className="rounded-2xl border border-slate-200 dark:border-zinc-800 p-3 space-y-2 h-fit">
             <button
               type="button"
               onClick={() => setActiveMenu("system")}
-              className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
+              className={`w-full text-left px-4 py-3 rounded-xl text-base transition-colors ${
                 activeMenu === "system"
                   ? "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300"
                   : "hover:bg-slate-100 dark:hover:bg-zinc-800 text-slate-700 dark:text-zinc-300"
@@ -99,7 +99,7 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
             <button
               type="button"
               onClick={() => setActiveMenu("prompt")}
-              className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
+              className={`w-full text-left px-4 py-3 rounded-xl text-base transition-colors ${
                 activeMenu === "prompt"
                   ? "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300"
                   : "hover:bg-slate-100 dark:hover:bg-zinc-800 text-slate-700 dark:text-zinc-300"
@@ -110,7 +110,7 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
             <button
               type="button"
               onClick={() => setActiveMenu("skills")}
-              className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
+              className={`w-full text-left px-4 py-3 rounded-xl text-base transition-colors ${
                 activeMenu === "skills"
                   ? "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300"
                   : "hover:bg-slate-100 dark:hover:bg-zinc-800 text-slate-700 dark:text-zinc-300"
@@ -120,9 +120,9 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
             </button>
           </div>
 
-          <div className="space-y-5">
+          <div className="space-y-5 overflow-y-auto pr-1">
             {activeMenu === "system" && (
-              <div className="space-y-3">
+              <div className="space-y-4 rounded-2xl border border-slate-200 p-5 dark:border-zinc-800">
                 <div className="space-y-2">
                   <Label htmlFor="theme-mode">主题模式</Label>
                   <Select id="theme-mode" value={themeLocal} onChange={(e) => setThemeLocal(e.currentTarget.value as "system" | "light" | "dark")}>
@@ -142,7 +142,7 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
                     placeholder="请输入您的 API Key"
                   />
                 </div>
-                <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50/70 px-3 py-2 dark:border-zinc-800 dark:bg-zinc-900/70">
+                <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50/70 px-4 py-3 dark:border-zinc-800 dark:bg-zinc-900/70">
                   <Label htmlFor="remember-key" className="text-sm">记住 API Key（便携版建议开启）</Label>
                   <Switch
                     id="remember-key"
@@ -154,8 +154,8 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
             )}
 
             {activeMenu === "prompt" && (
-              <div className="space-y-3 rounded-xl border border-slate-200 p-3 dark:border-zinc-800">
-                <div className="text-sm font-medium">按模块管理主题与详细提示词</div>
+              <div className="space-y-4 rounded-2xl border border-slate-200 p-5 dark:border-zinc-800">
+                <div className="text-base font-medium">按模块管理主题与详细提示词</div>
                 <div className="space-y-2">
                   <Label htmlFor="prompt-scope">功能模块</Label>
                   <Select id="prompt-scope" value={promptScope} onChange={(e) => setPromptScope(e.currentTarget.value as PromptScope)}>
@@ -166,7 +166,7 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
                     ))}
                   </Select>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <Input
                     value={promptTheme}
                     onChange={(e) => setPromptTheme(e.currentTarget.value)}
@@ -192,12 +192,12 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
                     添加提示词
                   </Button>
                 </div>
-                <div className="max-h-64 overflow-y-auto space-y-2">
+                <div className="max-h-72 overflow-y-auto space-y-2">
                   {scopedPrompts.length === 0 ? (
                     <div className="text-xs text-slate-500 dark:text-zinc-400">暂无提示词</div>
                   ) : (
                     scopedPrompts.map((item) => (
-                      <div key={item.id} className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 px-2 py-1.5 dark:border-zinc-800">
+                      <div key={item.id} className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 px-3 py-2 dark:border-zinc-800">
                         <div className="min-w-0">
                           <div className="text-xs text-blue-600 dark:text-blue-300 truncate">{item.theme || "默认主题"}</div>
                           <div className="text-xs text-slate-700 dark:text-zinc-300 line-clamp-2">{item.detail || item.text || ""}</div>
@@ -213,12 +213,12 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
             )}
 
             {activeMenu === "skills" && (
-              <div className="space-y-4 rounded-xl border border-slate-200 p-3 dark:border-zinc-800">
-                <div className="text-sm font-medium">Skills 与仓库管理</div>
+              <div className="space-y-4 rounded-2xl border border-slate-200 p-5 dark:border-zinc-800">
+                <div className="text-base font-medium">Skills 与仓库管理</div>
 
                 <div className="space-y-2">
                   <Label>添加仓库</Label>
-                  <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-2">
+                  <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-3">
                     <Input value={repoName} onChange={(e) => setRepoName(e.currentTarget.value)} placeholder="仓库名称" />
                     <Input value={repoUrl} onChange={(e) => setRepoUrl(e.currentTarget.value)} placeholder="仓库地址" />
                     <Button
@@ -234,9 +234,9 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
                       添加仓库
                     </Button>
                   </div>
-                  <div className="max-h-28 overflow-y-auto space-y-2">
+                  <div className="max-h-36 overflow-y-auto space-y-2">
                     {repositories.map((repo) => (
-                      <div key={repo.id} className="flex items-center justify-between rounded-lg border border-slate-200 px-2 py-1.5 dark:border-zinc-800">
+                      <div key={repo.id} className="flex items-center justify-between rounded-xl border border-slate-200 px-3 py-2 dark:border-zinc-800">
                         <div className="min-w-0">
                           <div className="text-xs font-medium text-slate-700 dark:text-zinc-300 truncate">{repo.name}</div>
                           <div className="text-xs text-slate-500 dark:text-zinc-400 truncate">{repo.url}</div>
@@ -252,7 +252,7 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
 
                 <div className="space-y-2">
                   <Label>添加 Skill</Label>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                     <Input value={skillName} onChange={(e) => setSkillName(e.currentTarget.value)} placeholder="Skill 名称" />
                     <Input value={skillCommand} onChange={(e) => setSkillCommand(e.currentTarget.value)} placeholder="Skill 命令" />
                     <Select value={skillRepoId} onChange={(e) => setSkillRepoId(e.currentTarget.value)}>
@@ -280,11 +280,11 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
                   </div>
                 </div>
 
-                <div className="space-y-2 max-h-64 overflow-y-auto">
+                <div className="space-y-2 max-h-72 overflow-y-auto">
                   {scopedSkills.map((skill) => {
                     const repo = repositories.find((item) => item.id === skill.repoId);
                     return (
-                      <div key={skill.id} className="rounded-lg border border-slate-200 px-2 py-2 dark:border-zinc-800 space-y-2">
+                      <div key={skill.id} className="rounded-xl border border-slate-200 px-3 py-3 dark:border-zinc-800 space-y-2">
                         <div className="text-sm font-medium text-slate-700 dark:text-zinc-300">{skill.name}</div>
                         <div className="text-xs text-slate-500 dark:text-zinc-400">{skill.command}</div>
                         <div className="text-xs text-slate-500 dark:text-zinc-400">仓库：{repo?.name || "未知仓库"}</div>
@@ -312,10 +312,18 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
           </div>
         </div>
 
-        <DialogFooter className="mt-2">
-          <Button variant="destructive" onClick={handleClear}>清空密钥</Button>
-          <Button variant="outline" onClick={onClose}>取消</Button>
-          <Button onClick={handleSave}>保存</Button>
+        <DialogFooter className="border-t border-slate-200 px-8 py-5 dark:border-zinc-800">
+          <div className="flex w-full flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              {activeMenu === "system" && (
+                <Button variant="destructive" onClick={handleClear}>清空密钥</Button>
+              )}
+            </div>
+            <div className="flex flex-col-reverse gap-2 sm:flex-row">
+              <Button variant="outline" onClick={onClose}>取消</Button>
+              <Button onClick={handleSave}>保存</Button>
+            </div>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>
