@@ -1,11 +1,8 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
 import "./globals.css";
 import Sidebar from "@/components/Sidebar";
 import TokenPlanStatusBar from "@/components/TokenPlanStatusBar";
 import AppProviders from "@/components/AppProviders";
-
-const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: "MiniMax 多模态 AI 客户端",
@@ -18,8 +15,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="zh-CN">
-      <body className={`${inter.className} bg-slate-100 dark:bg-zinc-950 text-black dark:text-white flex h-screen overflow-hidden`}>
+    <html lang="zh-CN" suppressHydrationWarning>
+      <body className="bg-[var(--background)] text-[var(--foreground)] flex h-screen overflow-hidden">
         <AppProviders>
           <Sidebar />
           <main className="flex-1 h-full overflow-y-auto p-4 md:p-5 pb-36">

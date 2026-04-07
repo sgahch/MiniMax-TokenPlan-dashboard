@@ -12,7 +12,11 @@ export default function AppProviders({ children }: { children: ReactNode }) {
 
     const applyTheme = () => {
       const isDark = themeMode === "dark" || (themeMode === "system" && media.matches);
-      root.classList.toggle("dark", isDark);
+      if (isDark) {
+        root.classList.add("dark");
+      } else {
+        root.classList.remove("dark");
+      }
     };
 
     applyTheme();

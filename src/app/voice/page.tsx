@@ -120,25 +120,25 @@ export default function VoicePage() {
   };
 
   return (
-    <div className="flex flex-col h-full bg-white/65 dark:bg-zinc-900/55 backdrop-blur-xl p-6 md:p-8 overflow-y-auto rounded-3xl border border-white/70 dark:border-zinc-800 shadow-xl">
+    <div className="mm-shell flex flex-col h-full p-6 md:p-8 overflow-y-auto">
       <div className="max-w-4xl mx-auto w-full space-y-8">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white flex items-center gap-3">
+          <h1 className="font-display text-3xl font-medium text-[#18181b] dark:text-white flex items-center gap-3">
             <Mic className="w-8 h-8 text-orange-600" />
             语音合成 (Text-to-Speech)
           </h1>
-          <p className="mt-2 text-gray-600 dark:text-gray-400">
+          <p className="mt-2 text-[#45515e] dark:text-gray-400">
             基于 MiniMax speech-2.8-hd 模型，输入文本即可生成逼真的语音。任务会在后台异步处理。
           </p>
         </div>
 
         {!apiKey && (
-          <div className="p-4 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-xl border border-red-200 dark:border-red-900/50">
+          <div className="p-4 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-2xl border border-red-200 dark:border-red-900/50">
             请先在左下角设置中配置您的 MiniMax API Key
           </div>
         )}
 
-        <div className="bg-white/80 dark:bg-zinc-900/80 rounded-2xl p-6 border border-gray-200/80 dark:border-zinc-700 space-y-4 shadow-sm">
+        <div className="mm-panel p-6 space-y-4 dark:border-zinc-700 dark:bg-zinc-900/80">
           <PromptQuickAccess
             scope="voice"
             value={text}
@@ -146,26 +146,26 @@ export default function VoicePage() {
             onAppendPrompt={(value) => setText((prev) => prev.trim() ? `${prev.trim()}\n${value}` : value)}
           />
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            <label className="block text-sm font-medium text-[#18181b] dark:text-gray-300 mb-2">
               待合成文本 *
             </label>
             <textarea
               value={text}
               onChange={(e) => setText(e.target.value)}
               placeholder="例如：微风拂过柔软的草地，清新的芳香伴随着鸟儿的歌唱。"
-              className="w-full h-32 px-4 py-3 bg-white dark:bg-zinc-950 border border-gray-300 dark:border-zinc-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500 resize-none dark:text-white"
+              className="w-full h-32 px-4 py-3 bg-white dark:bg-zinc-950 border border-[var(--border)] dark:border-zinc-700 rounded-2xl focus:outline-none focus:ring-2 focus:ring-orange-300/70 resize-none dark:text-white"
               disabled={isSubmitting || !apiKey}
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            <label className="block text-sm font-medium text-[#18181b] dark:text-gray-300 mb-2">
               选择音色
             </label>
             <select
               value={voiceId}
               onChange={(e) => setVoiceId(e.target.value)}
-              className="w-full md:w-64 px-4 py-3 bg-white dark:bg-zinc-950 border border-gray-300 dark:border-zinc-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500 dark:text-white"
+              className="w-full md:w-64 px-4 py-3 bg-white dark:bg-zinc-950 border border-[var(--border)] dark:border-zinc-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-300/70 dark:text-white"
               disabled={isSubmitting || !apiKey}
             >
               {appConfig.models.voiceOptions.map((voiceOption) => (
@@ -184,7 +184,7 @@ export default function VoicePage() {
             <button
               onClick={handleGenerate}
               disabled={isSubmitting || !text.trim() || !apiKey}
-              className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-orange-500 to-amber-500 text-white rounded-xl hover:from-orange-600 hover:to-amber-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm"
+              className="flex items-center gap-2 px-6 py-2.5 bg-[#181e25] text-white mm-pill hover:bg-[#111821] disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm"
             >
               {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <PlayCircle className="w-5 h-5" />}
               提交任务
@@ -193,7 +193,7 @@ export default function VoicePage() {
         </div>
 
         <div className="space-y-4">
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-white">任务列表</h2>
+          <h2 className="font-display text-2xl font-medium text-[#18181b] dark:text-white">任务列表</h2>
           {voiceTasks.length === 0 ? (
             <p className="text-gray-500 text-sm">暂无任务</p>
           ) : (
@@ -202,12 +202,12 @@ export default function VoicePage() {
                 const isExpanded = expandedTasks[task.id] ?? false;
 
                 return (
-                  <div key={task.id} className="bg-white/90 dark:bg-zinc-900/90 rounded-xl p-4 border border-gray-200 dark:border-zinc-800 shadow-sm flex flex-col gap-3 transition-all">
+                  <div key={task.id} className="bg-white/95 dark:bg-zinc-900/90 rounded-[20px] p-4 border border-[var(--border)] dark:border-zinc-800 shadow-sm flex flex-col gap-3 transition-all">
                     <div
                       className="flex items-start justify-between cursor-pointer group"
                       onClick={() => toggleTask(task.id)}
                     >
-                      <p className="text-sm text-gray-700 dark:text-gray-300 line-clamp-2 flex-1 pr-4 group-hover:text-orange-600 transition-colors">
+                      <p className="text-sm text-[#45515e] dark:text-gray-300 line-clamp-2 flex-1 pr-4 group-hover:text-orange-600 transition-colors">
                         <span className="font-semibold mr-2">文本:</span>
                         {task.prompt}
                       </p>
@@ -224,8 +224,8 @@ export default function VoicePage() {
                     </div>
 
                     {isExpanded && (
-                      <div className="pt-2 border-t border-gray-100 dark:border-zinc-800 animate-in fade-in slide-in-from-top-2">
-                        <div className="text-xs text-gray-500 flex items-center gap-1 mb-3">
+                      <div className="pt-2 border-t border-[var(--border-soft)] dark:border-zinc-800 animate-in fade-in slide-in-from-top-2">
+                        <div className="text-xs text-[#8e8e93] flex items-center gap-1 mb-3">
                           <Clock className="w-3 h-3" />
                           {new Date(task.createdAt).toLocaleString()}
                         </div>

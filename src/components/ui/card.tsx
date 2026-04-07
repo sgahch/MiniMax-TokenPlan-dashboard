@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 function Card({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
-      className={cn("rounded-xl border border-slate-200 bg-white text-slate-950 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-50", className)}
+      className={cn("rounded-[16px] border border-[var(--border)] bg-[var(--surface)] text-[var(--foreground)] shadow-[0px_0px_1px_rgba(0,0,0,0.32),0px_0px_2px_rgba(0,0,0,0.08),0px_1px_3px_rgba(45,127,249,0.28)] dark:shadow-none dark:border-zinc-800 dark:bg-zinc-900/95 dark:text-zinc-50", className)}
       {...props}
     />
   );
@@ -15,11 +15,11 @@ function CardHeader({ className, ...props }: React.ComponentProps<"div">) {
 }
 
 function CardTitle({ className, ...props }: React.ComponentProps<"div">) {
-  return <div className={cn("text-xl font-semibold leading-none tracking-tight", className)} {...props} />;
+  return <div className={cn("text-[24px] font-medium leading-[1.25] tracking-[0.12px]", className)} {...props} />;
 }
 
 function CardDescription({ className, ...props }: React.ComponentProps<"div">) {
-  return <div className={cn("text-sm text-slate-500 dark:text-zinc-400", className)} {...props} />;
+  return <div className={cn("text-[14px] text-[var(--muted-soft)] tracking-[0.07px] dark:text-zinc-400", className)} {...props} />;
 }
 
 function CardContent({ className, ...props }: React.ComponentProps<"div">) {

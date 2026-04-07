@@ -40,15 +40,15 @@ export default function PromptQuickAccess({ scope, value, onUsePrompt, onAppendP
   const visibleCount = detailOptions.length;
 
   return (
-    <div className="space-y-3 rounded-2xl border border-slate-200/80 bg-slate-50/75 p-3 dark:border-zinc-800 dark:bg-zinc-900/70">
+    <div className="space-y-3 rounded-[20px] border border-[var(--border)] bg-[var(--surface-muted)]/70 p-3 dark:border-zinc-800 dark:bg-zinc-900/70">
       <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
         <div>
-          <div className="text-sm font-medium text-slate-900 dark:text-zinc-100">提示词快捷库</div>
-          <div className="text-xs text-slate-500 dark:text-zinc-400">
+          <div className="text-sm font-medium text-[#18181b] dark:text-zinc-100">提示词快捷库</div>
+          <div className="text-xs text-[#45515e] dark:text-zinc-400">
             当前模块已收藏 {totalCount} 条，当前筛选显示 {visibleCount} 条
           </div>
         </div>
-        <div className="text-xs text-slate-500 dark:text-zinc-400">
+        <div className="text-xs text-[#45515e] dark:text-zinc-400">
           {selectedPrompt ? `主题：${selectedPrompt.theme || "默认主题"}` : "选择常用提示词后可替换或追加到当前输入"}
         </div>
       </div>
@@ -121,12 +121,12 @@ export default function PromptQuickAccess({ scope, value, onUsePrompt, onAppendP
         </div>
       </div>
       {selectedPromptText && (
-        <div className="rounded-xl border border-dashed border-slate-300 bg-white/80 px-3 py-2 text-sm leading-6 text-slate-700 dark:border-zinc-700 dark:bg-zinc-950/60 dark:text-zinc-300">
+        <div className="rounded-2xl border border-dashed border-[var(--border)] bg-white/95 px-3 py-2 text-sm leading-6 text-[#45515e] dark:border-zinc-700 dark:bg-zinc-950/60 dark:text-zinc-300">
           {selectedPromptText}
         </div>
       )}
       {scopedPrompts.length === 0 && (
-        <div className="rounded-xl border border-dashed border-slate-300 px-3 py-2 text-xs text-slate-500 dark:border-zinc-700 dark:text-zinc-400">
+        <div className="rounded-2xl border border-dashed border-[var(--border)] px-3 py-2 text-xs text-[#8e8e93] dark:border-zinc-700 dark:text-zinc-400">
           暂无提示词，可在设置中心按主题维护，也可直接收藏当前输入
         </div>
       )}

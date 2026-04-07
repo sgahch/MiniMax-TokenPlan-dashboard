@@ -34,6 +34,7 @@ MiniMax Token Plan Agent is a production-oriented multimodal client for MiniMax 
 ### UX and Productivity
 
 - Theme mode switching with persistent preference
+- Airtable-inspired enterprise UI design system (Haas typography, deep navy & primary blue palette, multi-layer soft shadows)
 - API key persistence controlled by an explicit remember toggle
 - Prompt quick access with explicit replace and append actions instead of implicit overwrite
 - Settings navigation split into System, Prompt Management, and Skills with summary cards and searchable lists

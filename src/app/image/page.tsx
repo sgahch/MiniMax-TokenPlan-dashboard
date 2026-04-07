@@ -114,25 +114,25 @@ export default function ImagePage() {
   };
 
   return (
-    <div className="flex flex-col h-full bg-white/65 dark:bg-zinc-900/55 backdrop-blur-xl p-6 md:p-8 overflow-y-auto rounded-3xl border border-white/70 dark:border-zinc-800 shadow-xl">
+    <div className="mm-shell flex flex-col h-full p-6 md:p-8 overflow-y-auto">
       <div className="max-w-4xl mx-auto w-full space-y-8">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white flex items-center gap-3">
+          <h1 className="font-display text-3xl font-medium text-[#18181b] dark:text-white flex items-center gap-3">
             <ImageIcon className="w-8 h-8 text-emerald-600" />
             图片生成 (Image-01)
           </h1>
-          <p className="mt-2 text-gray-600 dark:text-gray-400">
+          <p className="mt-2 text-[#45515e] dark:text-gray-400">
             支持文生图和主体参考图生图，两种模式均支持本地任务记录与结果下载。
           </p>
         </div>
 
         {!apiKey && (
-          <div className="p-4 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-xl border border-red-200 dark:border-red-900/50">
+          <div className="p-4 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-2xl border border-red-200 dark:border-red-900/50">
             请先在左下角设置中配置您的 MiniMax API Key
           </div>
         )}
 
-        <div className="bg-white/80 dark:bg-zinc-900/80 rounded-2xl p-6 border border-gray-200/80 dark:border-zinc-700 space-y-4 shadow-sm">
+        <div className="mm-panel p-6 space-y-4 dark:border-zinc-700 dark:bg-zinc-900/80">
           <PromptQuickAccess
             scope="image"
             value={prompt}
@@ -140,13 +140,13 @@ export default function ImagePage() {
             onAppendPrompt={(value) => setPrompt((prev) => prev.trim() ? `${prev.trim()}\n${value}` : value)}
           />
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            <label className="block text-sm font-medium text-[#18181b] dark:text-gray-300 mb-2">
               生成模式
             </label>
             <select
               value={mode}
               onChange={(e) => setMode(e.target.value as ImageGenerateMode)}
-              className="w-full md:w-64 px-4 py-3 bg-white dark:bg-zinc-950 border border-gray-300 dark:border-zinc-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:text-white"
+              className="w-full md:w-64 px-4 py-3 bg-white dark:bg-zinc-950 border border-[var(--border)] dark:border-zinc-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-300/70 dark:text-white"
               disabled={isSubmitting || !apiKey}
             >
               <option value="text_to_image">文生图</option>
@@ -155,13 +155,13 @@ export default function ImagePage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            <label className="block text-sm font-medium text-[#18181b] dark:text-gray-300 mb-2">
               模型选择
             </label>
             <select
               value={model}
               onChange={(e) => setModel(e.target.value)}
-              className="w-full md:w-64 px-4 py-3 bg-white dark:bg-zinc-950 border border-gray-300 dark:border-zinc-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:text-white"
+              className="w-full md:w-64 px-4 py-3 bg-white dark:bg-zinc-950 border border-[var(--border)] dark:border-zinc-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-300/70 dark:text-white"
               disabled={isSubmitting || !apiKey}
             >
               {appConfig.models.imageOptions.map((imageModel) => (
@@ -173,21 +173,21 @@ export default function ImagePage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            <label className="block text-sm font-medium text-[#18181b] dark:text-gray-300 mb-2">
               图片描述 (Prompt) *
             </label>
             <textarea
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
               placeholder="例如：女孩在图书馆的窗户前，看向远方，动漫风格，高细节..."
-              className="w-full h-32 px-4 py-3 bg-white dark:bg-zinc-950 border border-gray-300 dark:border-zinc-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none dark:text-white"
+              className="w-full h-32 px-4 py-3 bg-white dark:bg-zinc-950 border border-[var(--border)] dark:border-zinc-700 rounded-2xl focus:outline-none focus:ring-2 focus:ring-emerald-300/70 resize-none dark:text-white"
               disabled={isSubmitting || !apiKey}
             />
           </div>
 
           {mode === "subject_reference" && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              <label className="block text-sm font-medium text-[#18181b] dark:text-gray-300 mb-2">
                 主体参考图 URL *
               </label>
               <input
@@ -195,20 +195,20 @@ export default function ImagePage() {
                 value={referenceImageUrl}
                 onChange={(e) => setReferenceImageUrl(e.target.value)}
                 placeholder="https://example.com/character.jpg"
-                className="w-full px-4 py-3 bg-white dark:bg-zinc-950 border border-gray-300 dark:border-zinc-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:text-white"
+                className="w-full px-4 py-3 bg-white dark:bg-zinc-950 border border-[var(--border)] dark:border-zinc-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-300/70 dark:text-white"
                 disabled={isSubmitting || !apiKey}
               />
             </div>
           )}
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            <label className="block text-sm font-medium text-[#18181b] dark:text-gray-300 mb-2">
               图片比例
             </label>
             <select
               value={aspectRatio}
               onChange={(e) => setAspectRatio(e.target.value)}
-              className="w-full md:w-64 px-4 py-3 bg-white dark:bg-zinc-950 border border-gray-300 dark:border-zinc-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:text-white"
+              className="w-full md:w-64 px-4 py-3 bg-white dark:bg-zinc-950 border border-[var(--border)] dark:border-zinc-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-300/70 dark:text-white"
               disabled={isSubmitting || !apiKey}
             >
               {appConfig.models.imageAspectRatios.map((ratio) => (
@@ -227,7 +227,7 @@ export default function ImagePage() {
             <button
               onClick={handleGenerate}
               disabled={isSubmitting || !prompt.trim() || !apiKey}
-              className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-xl hover:from-emerald-600 hover:to-teal-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm"
+              className="flex items-center gap-2 px-6 py-2.5 bg-[#181e25] text-white mm-pill hover:bg-[#111821] disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm"
             >
               {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <PlayCircle className="w-5 h-5" />}
               开始生成
@@ -236,7 +236,7 @@ export default function ImagePage() {
         </div>
 
         <div className="space-y-4">
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-white">任务列表</h2>
+          <h2 className="font-display text-2xl font-medium text-[#18181b] dark:text-white">任务列表</h2>
           {imageTasks.length === 0 ? (
             <p className="text-gray-500 text-sm">暂无任务</p>
           ) : (
@@ -245,12 +245,12 @@ export default function ImagePage() {
                 const isExpanded = expandedTasks[task.id] ?? false;
 
                 return (
-                  <div key={task.id} className="bg-white/90 dark:bg-zinc-900/90 rounded-xl p-4 border border-gray-200 dark:border-zinc-800 shadow-sm flex flex-col gap-3 transition-all">
+                  <div key={task.id} className="bg-white/95 dark:bg-zinc-900/90 rounded-[20px] p-4 border border-[var(--border)] dark:border-zinc-800 shadow-sm flex flex-col gap-3 transition-all">
                     <div
                       className="flex items-start justify-between cursor-pointer group"
                       onClick={() => toggleTask(task.id)}
                     >
-                      <p className="text-sm text-gray-700 dark:text-gray-300 line-clamp-2 flex-1 pr-4 group-hover:text-emerald-600 transition-colors">
+                      <p className="text-sm text-[#45515e] dark:text-gray-300 line-clamp-2 flex-1 pr-4 group-hover:text-emerald-600 transition-colors">
                         <span className="font-semibold mr-2">Prompt:</span>
                         {task.prompt}
                       </p>
@@ -267,8 +267,8 @@ export default function ImagePage() {
                     </div>
 
                     {isExpanded && (
-                      <div className="pt-2 border-t border-gray-100 dark:border-zinc-800 animate-in fade-in slide-in-from-top-2">
-                        <div className="text-xs text-gray-500 flex items-center gap-1 mb-3">
+                      <div className="pt-2 border-t border-[var(--border-soft)] dark:border-zinc-800 animate-in fade-in slide-in-from-top-2">
+                        <div className="text-xs text-[#8e8e93] flex items-center gap-1 mb-3">
                           <Clock className="w-3 h-3" />
                           {new Date(task.createdAt).toLocaleString()}
                         </div>

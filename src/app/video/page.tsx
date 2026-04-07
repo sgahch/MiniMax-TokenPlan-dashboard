@@ -285,25 +285,25 @@ export default function VideoPage() {
   };
 
   return (
-    <div className="flex flex-col h-full bg-white/65 dark:bg-zinc-900/55 backdrop-blur-xl p-6 md:p-8 overflow-y-auto rounded-3xl border border-white/70 dark:border-zinc-800 shadow-xl">
+    <div className="mm-shell flex flex-col h-full p-6 md:p-8 overflow-y-auto">
       <div className="max-w-4xl mx-auto w-full space-y-8">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white flex items-center gap-3">
+          <h1 className="font-display text-3xl font-medium text-[#18181b] dark:text-white flex items-center gap-3">
             <Video className="w-8 h-8 text-blue-600" />
             视频生成 (Hailuo)
           </h1>
-          <p className="mt-2 text-gray-600 dark:text-gray-400">
+          <p className="mt-2 text-[#45515e] dark:text-gray-400">
             支持文生视频、图生视频、首尾帧视频与主体参考视频四种模式，自动匹配官方模型并异步轮询结果。
           </p>
         </div>
 
         {!apiKey && (
-          <div className="p-4 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-xl border border-red-200 dark:border-red-900/50 text-sm">
+          <div className="p-4 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-2xl border border-red-200 dark:border-red-900/50 text-sm">
             请先在左下角设置中配置您的 MiniMax API Key
           </div>
         )}
 
-        <Card className="bg-white/80 dark:bg-zinc-900/80 border-gray-200/80 dark:border-zinc-700">
+        <Card className="bg-white/95 dark:bg-zinc-900/80 border-[var(--border)] dark:border-zinc-700">
           <CardHeader className="pb-2">
             <CardTitle className="text-lg">参数配置</CardTitle>
             <CardDescription>选择模式、模型和参数后提交生成任务</CardDescription>
@@ -421,7 +421,7 @@ export default function VideoPage() {
         </Card>
 
         <div className="space-y-4">
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-white">任务列表</h2>
+          <h2 className="font-display text-2xl font-medium text-[#18181b] dark:text-white">任务列表</h2>
           {videoTasks.length === 0 ? (
             <p className="text-gray-500 text-sm">暂无任务</p>
           ) : (
@@ -430,12 +430,12 @@ export default function VideoPage() {
                 const isExpanded = expandedTasks[task.id] ?? false;
 
                 return (
-                  <Card key={task.id} className="bg-white/90 dark:bg-zinc-900/90 p-4 border-gray-200 dark:border-zinc-800 flex flex-col gap-3 transition-all">
+                  <Card key={task.id} className="bg-white/95 dark:bg-zinc-900/90 p-4 border-[var(--border)] dark:border-zinc-800 flex flex-col gap-3 transition-all">
                     <div
                       className="flex items-start justify-between cursor-pointer group"
                       onClick={() => toggleTask(task.id)}
                     >
-                      <p className="text-sm text-gray-700 dark:text-gray-300 line-clamp-2 flex-1 pr-4 group-hover:text-blue-600 transition-colors">
+                      <p className="text-sm text-[#45515e] dark:text-gray-300 line-clamp-2 flex-1 pr-4 group-hover:text-blue-600 transition-colors">
                         <span className="font-semibold mr-2">Prompt:</span>
                         {task.prompt}
                       </p>
@@ -465,8 +465,8 @@ export default function VideoPage() {
                     </div>
 
                     {isExpanded && (
-                      <div className="pt-2 border-t border-gray-100 dark:border-zinc-800 animate-in fade-in slide-in-from-top-2">
-                        <div className="text-xs text-gray-500 flex items-center gap-1 mb-3">
+                      <div className="pt-2 border-t border-[var(--border-soft)] dark:border-zinc-800 animate-in fade-in slide-in-from-top-2">
+                        <div className="text-xs text-[#8e8e93] flex items-center gap-1 mb-3">
                           <Clock className="w-3 h-3" />
                           {new Date(task.createdAt).toLocaleString()}
                         </div>

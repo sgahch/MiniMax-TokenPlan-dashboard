@@ -156,21 +156,21 @@ export default function ChatPage() {
   };
 
   return (
-    <div className="flex h-full rounded-3xl border border-white/70 dark:border-zinc-800 bg-white/65 dark:bg-zinc-900/55 backdrop-blur-xl shadow-xl overflow-hidden">
-      <div className={`border-r border-white/80 dark:border-zinc-800 bg-white/60 dark:bg-zinc-900/40 flex flex-col transition-all ${sessionListCollapsed ? "w-20" : "w-72"}`}>
-        <div className="p-4 border-b border-white/70 dark:border-zinc-800 space-y-2">
+    <div className="mm-shell flex h-full overflow-hidden">
+      <div className={`border-r border-[var(--border-soft)] dark:border-zinc-800 bg-white/90 dark:bg-zinc-950/75 flex flex-col transition-all ${sessionListCollapsed ? "w-20" : "w-72"}`}>
+        <div className="p-4 border-b border-[var(--border-soft)] dark:border-zinc-800 space-y-2">
           <div className={`flex ${sessionListCollapsed ? "justify-center" : "justify-end"}`}>
             <button
               type="button"
               onClick={() => setSessionListCollapsed((v) => !v)}
-              className="h-8 w-8 rounded-lg border border-slate-200 dark:border-zinc-700 bg-white/80 dark:bg-zinc-900/80 hover:bg-slate-100 dark:hover:bg-zinc-800 flex items-center justify-center"
+              className="h-8 w-8 rounded-full border border-[var(--border)] dark:border-zinc-700 bg-white dark:bg-zinc-900 hover:bg-black/[0.04] dark:hover:bg-zinc-800 flex items-center justify-center"
             >
               {sessionListCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
             </button>
           </div>
           <button
             onClick={() => createSession()}
-            className={`flex items-center w-full px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all justify-center font-medium shadow-sm ${sessionListCollapsed ? "" : "gap-2"}`}
+            className={`flex items-center w-full px-4 py-2.5 bg-[#181e25] text-white mm-pill hover:bg-[#111821] transition-all justify-center font-medium shadow-sm ${sessionListCollapsed ? "" : "gap-2"}`}
             title="新建对话"
           >
             <PlusCircle className="w-5 h-5" />
@@ -182,10 +182,10 @@ export default function ChatPage() {
             <div
               key={session.id}
               onClick={() => setActiveSession(session.id)}
-            className={`flex items-center p-3 rounded-xl cursor-pointer transition-all group border ${sessionListCollapsed ? "justify-center" : "justify-between"} ${
+            className={`flex items-center p-3 rounded-2xl cursor-pointer transition-all group border ${sessionListCollapsed ? "justify-center" : "justify-between"} ${
                 activeSessionId === session.id
-                  ? "bg-gradient-to-r from-blue-500/20 to-indigo-500/20 dark:from-blue-500/25 dark:to-indigo-500/20 text-blue-700 dark:text-blue-300 border-blue-200/80 dark:border-blue-700/50"
-                  : "hover:bg-white dark:hover:bg-zinc-800 text-gray-700 dark:text-gray-300 border-transparent"
+                  ? "bg-black/[0.04] text-[#18181b] dark:bg-blue-500/20 dark:text-blue-300 border-[var(--border)] dark:border-blue-700/50 shadow-[0_0_15px_rgba(44,30,116,0.16)]"
+                  : "hover:bg-black/[0.02] dark:hover:bg-zinc-800 text-[#45515e] dark:text-gray-300 border-transparent"
               }`}
               title={sessionListCollapsed ? session.title : undefined}
             >
@@ -217,22 +217,22 @@ export default function ChatPage() {
         ) : (
           <>
             <div className="flex-1 overflow-y-auto p-6 space-y-6">
-              <div className="mx-auto flex max-w-3xl flex-col gap-3 rounded-2xl border border-slate-200/80 bg-white/85 p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/70">
+              <div className="mx-auto flex max-w-3xl flex-col gap-3 rounded-[20px] border border-[var(--border)] bg-white/95 p-4 shadow-[0_4px_6px_rgba(0,0,0,0.08)] dark:border-zinc-800 dark:bg-zinc-900/75">
                 <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                   <div>
-                    <div className="text-lg font-semibold text-slate-900 dark:text-zinc-100">{activeSession.title}</div>
-                    <div className="mt-1 text-sm text-slate-500 dark:text-zinc-400">
+                    <div className="font-display text-xl font-medium text-[#18181b] dark:text-zinc-100">{activeSession.title}</div>
+                    <div className="mt-1 text-sm text-[#45515e] dark:text-zinc-400">
                       当前会话共 {activeMessageCount} 条消息，发送时自动携带最近 {contextMessageCount} 条上下文。
                     </div>
                   </div>
                   <div className="flex flex-wrap gap-2 text-xs">
-                    <span className="rounded-full border border-slate-200 px-3 py-1 text-slate-600 dark:border-zinc-700 dark:text-zinc-300">
+                    <span className="rounded-full border border-[var(--border)] px-3 py-1 text-[#45515e] dark:border-zinc-700 dark:text-zinc-300">
                       模型：{appConfig.models.chatDefault}
                     </span>
-                    <span className="rounded-full border border-slate-200 px-3 py-1 text-slate-600 dark:border-zinc-700 dark:text-zinc-300">
+                    <span className="rounded-full border border-[var(--border)] px-3 py-1 text-[#45515e] dark:border-zinc-700 dark:text-zinc-300">
                       会话数：{sessions.length}
                     </span>
-                    <span className="rounded-full border border-slate-200 px-3 py-1 text-slate-600 dark:border-zinc-700 dark:text-zinc-300">
+                    <span className="rounded-full border border-[var(--border)] px-3 py-1 text-[#45515e] dark:border-zinc-700 dark:text-zinc-300">
                       MCP：{mcpEnabled && selectedMcpServers.length > 0 ? `已启用 ${selectedMcpServers.length} 个` : "未启用"}
                     </span>
                   </div>
@@ -247,7 +247,7 @@ export default function ChatPage() {
                 >
                   <div
                     className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
-                      msg.role === "user" ? "bg-blue-600" : "bg-emerald-600"
+                      msg.role === "user" ? "bg-[#1456f0]" : "bg-[#181e25]"
                     }`}
                   >
                     {msg.role === "user" ? (
@@ -259,11 +259,11 @@ export default function ChatPage() {
                   <div
                     className={`px-4 py-3 rounded-2xl max-w-[80%] ${
                       msg.role === "user"
-                        ? "bg-blue-100 text-blue-900 dark:bg-blue-900/40 dark:text-blue-100 rounded-tr-none"
-                        : "bg-gray-100 text-gray-900 dark:bg-zinc-800 dark:text-gray-100 rounded-tl-none"
+                        ? "bg-blue-50 text-blue-900 dark:bg-blue-900/40 dark:text-blue-100 rounded-tr-none border border-blue-100 dark:border-blue-800/60"
+                        : "bg-white text-[#222222] dark:bg-zinc-800 dark:text-gray-100 rounded-tl-none border border-[var(--border)] dark:border-zinc-700"
                     }`}
                   >
-                    <div className={`mb-2 flex items-center gap-2 text-[11px] ${msg.role === "user" ? "justify-end text-blue-700/80 dark:text-blue-200/80" : "justify-between text-slate-500 dark:text-zinc-400"}`}>
+                    <div className={`mb-2 flex items-center gap-2 text-[11px] ${msg.role === "user" ? "justify-end text-blue-700/80 dark:text-blue-200/80" : "justify-between text-[#8e8e93] dark:text-zinc-400"}`}>
                       <span>{msg.role === "user" ? "你" : "MiniMax Assistant"}</span>
                       <div className="flex items-center gap-2">
                         <span>{formatTime(msg.createdAt)}</span>
@@ -286,7 +286,7 @@ export default function ChatPage() {
                   <div className="w-8 h-8 rounded-full bg-emerald-600 flex items-center justify-center shrink-0">
                     <Bot className="w-5 h-5 text-white" />
                   </div>
-                  <div className="px-4 py-3 rounded-2xl bg-gray-100 dark:bg-zinc-800 rounded-tl-none">
+                  <div className="px-4 py-3 rounded-2xl bg-white border border-[var(--border)] dark:bg-zinc-800 dark:border-zinc-700 rounded-tl-none">
                     <div className="flex gap-1 items-center h-6">
                       <div className="w-2 h-2 rounded-full bg-gray-400 animate-bounce" />
                       <div className="w-2 h-2 rounded-full bg-gray-400 animate-bounce [animation-delay:-0.15s]" />
@@ -298,19 +298,19 @@ export default function ChatPage() {
               <div ref={messagesEndRef} />
             </div>
 
-            <div className="p-4 pb-6 bg-white/70 dark:bg-zinc-900/60 border-t border-white/80 dark:border-zinc-800">
+            <div className="p-4 pb-6 bg-white/75 dark:bg-zinc-900/60 border-t border-[var(--border-soft)] dark:border-zinc-800">
               <div className="max-w-3xl mx-auto relative space-y-2">
                 <PromptQuickAccess scope="chat" value={input} onUsePrompt={setInput} onAppendPrompt={appendInput} />
-                <div className="rounded-xl border border-slate-200 bg-white/80 px-3 py-2 text-xs dark:border-zinc-700 dark:bg-zinc-900/70">
+                <div className="rounded-2xl border border-[var(--border)] bg-white/95 px-3 py-2 text-xs dark:border-zinc-700 dark:bg-zinc-900/70">
                   <div className="flex flex-wrap items-center gap-2">
                     <button
                       type="button"
                       onClick={() => setMcpEnabled((value) => !value)}
                       disabled={enabledMcpServers.length === 0}
-                      className={`rounded-lg border px-2.5 py-1 transition-colors ${
+                      className={`rounded-full border px-2.5 py-1 transition-colors ${
                         mcpEnabled
                           ? "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-900/30 dark:text-blue-300"
-                          : "border-slate-200 bg-white text-slate-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
+                          : "border-[var(--border)] bg-white text-[#45515e] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
                       } disabled:cursor-not-allowed disabled:opacity-50`}
                     >
                       {mcpEnabled ? "MCP 已启用" : "MCP 已关闭"}
@@ -323,10 +323,10 @@ export default function ChatPage() {
                           key={server.id}
                           type="button"
                           onClick={() => toggleMcpServer(server.id)}
-                          className={`rounded-lg border px-2.5 py-1 transition-colors ${
+                          className={`rounded-full border px-2.5 py-1 transition-colors ${
                             selectedMcpServerIds.includes(server.id)
                               ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300"
-                              : "border-slate-200 bg-white text-slate-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
+                              : "border-[var(--border)] bg-white text-[#45515e] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
                           }`}
                         >
                           {server.name}
@@ -355,14 +355,14 @@ export default function ChatPage() {
                     }
                   }}
                   placeholder="输入消息..."
-                  className="flex-1 max-h-48 min-h-[56px] px-4 py-3 bg-white dark:bg-zinc-800 rounded-2xl border border-gray-200 dark:border-zinc-700 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-white shadow-sm"
+                  className="flex-1 max-h-48 min-h-[56px] px-4 py-3 bg-white dark:bg-zinc-800 rounded-2xl border border-[var(--border)] dark:border-zinc-700 resize-none focus:outline-none focus:ring-2 focus:ring-blue-300/70 dark:text-white shadow-sm"
                   rows={1}
                   disabled={!apiKey || isLoading}
                 />
                 <button
                   onClick={handleSend}
                   disabled={!input.trim() || !apiKey || isLoading || (mcpEnabled && selectedMcpServers.length === 0)}
-                  className="p-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-2xl hover:from-blue-700 hover:to-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shrink-0 shadow-sm"
+                  className="p-3.5 bg-[#181e25] text-white rounded-full hover:bg-[#111821] disabled:opacity-50 disabled:cursor-not-allowed transition-all shrink-0 shadow-sm"
                 >
                   <Send className="w-5 h-5" />
                 </button>

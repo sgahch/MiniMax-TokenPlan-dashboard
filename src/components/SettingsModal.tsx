@@ -212,14 +212,14 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-h-[90vh] w-[min(96vw,78rem)] max-w-6xl overflow-hidden p-0">
-        <DialogHeader className="border-b border-slate-200 px-8 py-6 dark:border-zinc-800">
+        <DialogHeader className="border-b border-[var(--border)] px-8 py-6 dark:border-zinc-800">
           <DialogTitle className="text-2xl">设置</DialogTitle>
           <DialogDescription>围绕系统配置、提示词资产与 Skills 能力，提供更完整的工作台级管理体验。</DialogDescription>
         </DialogHeader>
 
         <div className="grid max-h-[calc(90vh-9rem)] grid-cols-1 gap-5 overflow-hidden px-8 py-6 md:grid-cols-[240px_1fr]">
           <div className="space-y-3">
-            <div className="rounded-2xl border border-slate-200 p-3 dark:border-zinc-800">
+            <div className="rounded-2xl border border-[var(--border)] p-3 dark:border-zinc-800">
               <div className="mb-3 px-1">
                 <div className="text-sm font-semibold text-slate-900 dark:text-zinc-100">设置中心</div>
                 <div className="mt-1 text-xs text-slate-500 dark:text-zinc-400">将高频配置收敛为三个清晰入口，减少来回跳转。</div>
@@ -242,7 +242,7 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
                 ))}
               </div>
             </div>
-            <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 dark:border-zinc-800 dark:bg-zinc-900/60">
+            <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface-muted)]/70 p-4 dark:border-zinc-800 dark:bg-zinc-900/60">
               <div className="text-xs font-medium uppercase tracking-[0.18em] text-slate-500 dark:text-zinc-400">工作台状态</div>
               <div className="mt-2 space-y-1 text-sm text-slate-700 dark:text-zinc-300">
                 <div>Prompt 总数：{prompts.length}</div>
@@ -255,22 +255,27 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
 
           <div className="space-y-5 overflow-y-auto pr-1">
             {activeMenu === "system" && (
-              <div className="space-y-4 rounded-2xl border border-slate-200 p-5 dark:border-zinc-800">
+              <div className="space-y-4 rounded-2xl border border-[var(--border)] p-5 dark:border-zinc-800">
                 <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
                   {systemSummaryItems.map((item) => (
-                    <div key={item.label} className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4 dark:border-zinc-800 dark:bg-zinc-900/70">
+                    <div key={item.label} className="rounded-2xl border border-[var(--border)] bg-[var(--surface-muted)]/80 p-4 dark:border-zinc-800 dark:bg-zinc-900/70">
                       <div className="text-xs text-slate-500 dark:text-zinc-400">{item.label}</div>
                       <div className="mt-1 text-sm font-medium text-slate-900 dark:text-zinc-100 break-all">{item.value}</div>
                     </div>
                   ))}
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="theme-mode">主题模式</Label>
-                  <Select id="theme-mode" value={themeLocal} onChange={(e) => setThemeLocal(e.currentTarget.value as "system" | "light" | "dark")}>
-                    <option value="system">跟随系统</option>
-                    <option value="light">浅色模式</option>
-                    <option value="dark">深色模式</option>
-                  </Select>
+                <div className="flex items-center justify-between rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] px-4 py-3 dark:border-zinc-800 dark:bg-zinc-900/70">
+                  <div>
+                    <Label htmlFor="theme-mode-switch" className="text-[16px] font-medium">深色模式</Label>
+                    <div className="mt-1 text-xs text-[var(--muted-soft)] dark:text-zinc-400">
+                      开启后界面将切换至深色主题。
+                    </div>
+                  </div>
+                  <Switch
+                    id="theme-mode-switch"
+                    checked={themeLocal === "dark"}
+                    onCheckedChange={(checked) => setThemeLocal(checked ? "dark" : "light")}
+                  />
                 </div>
 
                 <div className="space-y-2">
@@ -283,10 +288,10 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
                     placeholder="请输入您的 API Key"
                   />
                 </div>
-                <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50/70 px-4 py-3 dark:border-zinc-800 dark:bg-zinc-900/70">
+                <div className="flex items-center justify-between rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] px-4 py-3 dark:border-zinc-800 dark:bg-zinc-900/70">
                   <div>
-                    <Label htmlFor="remember-key" className="text-sm">记住 API Key（便携版建议开启）</Label>
-                    <div className="mt-1 text-xs text-slate-500 dark:text-zinc-400">
+                    <Label htmlFor="remember-key" className="text-[16px] font-medium">记住 API Key（便携版建议开启）</Label>
+                    <div className="mt-1 text-xs text-[var(--muted-soft)] dark:text-zinc-400">
                       关闭后仅在当前会话保留，适合共享设备；开启后重启应用仍会保留。
                     </div>
                   </div>
@@ -303,7 +308,7 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
             )}
 
             {activeMenu === "prompt" && (
-              <div className="space-y-4 rounded-2xl border border-slate-200 p-5 dark:border-zinc-800">
+              <div className="space-y-4 rounded-2xl border border-[var(--border)] p-5 dark:border-zinc-800">
                 <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
                   <div>
                     <div className="text-base font-medium">按模块管理主题与详细提示词</div>
@@ -327,15 +332,15 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
                   </Select>
                 </div>
                 <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4 dark:border-zinc-800 dark:bg-zinc-900/70">
+                  <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface-muted)]/80 p-4 dark:border-zinc-800 dark:bg-zinc-900/70">
                     <div className="text-xs text-slate-500 dark:text-zinc-400">当前模块</div>
                     <div className="mt-1 text-sm font-medium text-slate-900 dark:text-zinc-100">{scopeLabelMap[promptScope]}</div>
                   </div>
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4 dark:border-zinc-800 dark:bg-zinc-900/70">
+                  <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface-muted)]/80 p-4 dark:border-zinc-800 dark:bg-zinc-900/70">
                     <div className="text-xs text-slate-500 dark:text-zinc-400">主题数量</div>
                     <div className="mt-1 text-sm font-medium text-slate-900 dark:text-zinc-100">{scopeThemeCount}</div>
                   </div>
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4 dark:border-zinc-800 dark:bg-zinc-900/70">
+                  <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface-muted)]/80 p-4 dark:border-zinc-800 dark:bg-zinc-900/70">
                     <div className="text-xs text-slate-500 dark:text-zinc-400">提示词条数</div>
                     <div className="mt-1 text-sm font-medium text-slate-900 dark:text-zinc-100">{filteredPrompts.length}</div>
                   </div>
@@ -377,7 +382,7 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
                     filteredPrompts.map((item) => {
                       const isEditing = editingPromptId === item.id;
                       return (
-                        <div key={item.id} className="rounded-xl border border-slate-200 px-3 py-3 dark:border-zinc-800">
+                        <div key={item.id} className="rounded-xl border border-[var(--border)] px-3 py-3 dark:border-zinc-800">
                           {isEditing ? (
                             <div className="space-y-3">
                               <Input value={editingPromptTheme} onChange={(e) => setEditingPromptTheme(e.currentTarget.value)} placeholder="主题" />
@@ -431,21 +436,21 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
             )}
 
             {activeMenu === "skills" && (
-              <div className="space-y-4 rounded-2xl border border-slate-200 p-5 dark:border-zinc-800">
+              <div className="space-y-4 rounded-2xl border border-[var(--border)] p-5 dark:border-zinc-800">
                 <div>
                   <div className="text-base font-medium">Skills 与仓库管理</div>
                   <div className="mt-1 text-sm text-slate-500 dark:text-zinc-400">通过仓库归档与应用状态，让技能资产更接近真实产品控制台。</div>
                 </div>
                 <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4 dark:border-zinc-800 dark:bg-zinc-900/70">
+                  <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface-muted)]/80 p-4 dark:border-zinc-800 dark:bg-zinc-900/70">
                     <div className="text-xs text-slate-500 dark:text-zinc-400">仓库数量</div>
                     <div className="mt-1 text-sm font-medium text-slate-900 dark:text-zinc-100">{repositories.length}</div>
                   </div>
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4 dark:border-zinc-800 dark:bg-zinc-900/70">
+                  <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface-muted)]/80 p-4 dark:border-zinc-800 dark:bg-zinc-900/70">
                     <div className="text-xs text-slate-500 dark:text-zinc-400">Skill 总数</div>
                     <div className="mt-1 text-sm font-medium text-slate-900 dark:text-zinc-100">{skills.length}</div>
                   </div>
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4 dark:border-zinc-800 dark:bg-zinc-900/70">
+                  <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface-muted)]/80 p-4 dark:border-zinc-800 dark:bg-zinc-900/70">
                     <div className="text-xs text-slate-500 dark:text-zinc-400">已应用</div>
                     <div className="mt-1 text-sm font-medium text-slate-900 dark:text-zinc-100">{appliedSkillsCount}</div>
                   </div>
@@ -472,7 +477,7 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
                   </div>
                   <div className="max-h-36 overflow-y-auto space-y-2">
                     {repositories.map((repo) => (
-                      <div key={repo.id} className="flex items-center justify-between rounded-xl border border-slate-200 px-3 py-2 dark:border-zinc-800">
+                      <div key={repo.id} className="flex items-center justify-between rounded-xl border border-[var(--border)] px-3 py-2 dark:border-zinc-800">
                         <div className="min-w-0">
                           <div className="text-xs font-medium text-slate-700 dark:text-zinc-300 truncate">{repo.name}</div>
                           <div className="text-xs text-slate-500 dark:text-zinc-400 truncate">{repo.url}</div>
@@ -521,7 +526,7 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
                   {scopedSkills.map((skill) => {
                     const repo = repositories.find((item) => item.id === skill.repoId);
                     return (
-                      <div key={skill.id} className="rounded-xl border border-slate-200 px-3 py-3 dark:border-zinc-800 space-y-2">
+                      <div key={skill.id} className="rounded-xl border border-[var(--border)] px-3 py-3 dark:border-zinc-800 space-y-2">
                         <div className="text-sm font-medium text-slate-700 dark:text-zinc-300">{skill.name}</div>
                         <div className="text-xs text-slate-500 dark:text-zinc-400">{skill.command}</div>
                         <div className="text-xs text-slate-500 dark:text-zinc-400">仓库：{repo?.name || "未知仓库"}</div>
@@ -548,21 +553,21 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
             )}
 
             {activeMenu === "mcp" && (
-              <div className="space-y-4 rounded-2xl border border-slate-200 p-5 dark:border-zinc-800">
+              <div className="space-y-4 rounded-2xl border border-[var(--border)] p-5 dark:border-zinc-800">
                 <div>
                   <div className="text-base font-medium">MCP 服务管理</div>
                   <div className="mt-1 text-sm text-slate-500 dark:text-zinc-400">快速添加、删除并开关 MCP 服务，文本对话页可按会话启用。</div>
                 </div>
                 <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4 dark:border-zinc-800 dark:bg-zinc-900/70">
+                  <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface-muted)]/80 p-4 dark:border-zinc-800 dark:bg-zinc-900/70">
                     <div className="text-xs text-slate-500 dark:text-zinc-400">服务总数</div>
                     <div className="mt-1 text-sm font-medium text-slate-900 dark:text-zinc-100">{mcpServers.length}</div>
                   </div>
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4 dark:border-zinc-800 dark:bg-zinc-900/70">
+                  <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface-muted)]/80 p-4 dark:border-zinc-800 dark:bg-zinc-900/70">
                     <div className="text-xs text-slate-500 dark:text-zinc-400">已启用</div>
                     <div className="mt-1 text-sm font-medium text-slate-900 dark:text-zinc-100">{enabledMcpCount}</div>
                   </div>
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4 dark:border-zinc-800 dark:bg-zinc-900/70">
+                  <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface-muted)]/80 p-4 dark:border-zinc-800 dark:bg-zinc-900/70">
                     <div className="text-xs text-slate-500 dark:text-zinc-400">未启用</div>
                     <div className="mt-1 text-sm font-medium text-slate-900 dark:text-zinc-100">{mcpServers.length - enabledMcpCount}</div>
                   </div>
@@ -597,7 +602,7 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
                     value={mcpJsonText}
                     onChange={(e) => setMcpJsonText(e.currentTarget.value)}
                     placeholder='{"mcpServers":{"MiniMax":{"command":"uvx","args":["minimax-coding-plan-mcp"],"env":{"MINIMAX_API_KEY":"***","MINIMAX_MCP_BASE_PATH":"E:\\\\下载"}}}}'
-                    className="min-h-36 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
+                    className="min-h-36 w-full rounded-xl border border-[var(--border)] bg-white px-3 py-2 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
                   />
                   <div className="flex items-center justify-between">
                     <div className="text-xs text-slate-500 dark:text-zinc-400">支持 {`mcpServers.<name>.command/args/env`} 结构</div>
@@ -608,7 +613,7 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
 
                 <div className="max-h-72 space-y-2 overflow-y-auto">
                   {sortedMcpServers.map((server) => (
-                    <div key={server.id} className="rounded-xl border border-slate-200 px-3 py-3 dark:border-zinc-800">
+                    <div key={server.id} className="rounded-xl border border-[var(--border)] px-3 py-3 dark:border-zinc-800">
                       <div className="flex items-center justify-between gap-3">
                         <div className="min-w-0">
                           <div className="truncate text-sm font-medium text-slate-800 dark:text-zinc-200">{server.name}</div>
@@ -647,7 +652,7 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
           </div>
         </div>
 
-        <DialogFooter className="border-t border-slate-200 px-8 py-5 dark:border-zinc-800">
+        <DialogFooter className="border-t border-[var(--border)] px-8 py-5 dark:border-zinc-800">
           <div className="flex w-full flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div>
               {activeMenu === "system" && (
