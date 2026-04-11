@@ -4,4 +4,7 @@ interface Window {
     set: (key: string, val: unknown) => Promise<void>;
     delete: (key: string) => Promise<void>;
   };
+  electronMedia?: {
+    download: (id: string, url: string) => Promise<string | null>;
+  };
 }

@@ -157,6 +157,16 @@ export default function VideoPage() {
       downloadingIdsRef.current.add(task.id);
       void (async () => {
         try {
+          if (window.electronMedia) {
+            const localUrl = await window.electronMedia.download(task.id, sourceUrl);
+            if (cancelled) return;
+            if (localUrl) {
+              setPlaybackUrls((prev) => ({ ...prev, [task.id]: localUrl }));
+              sourceUrlRef.current[task.id] = sourceUrl;
+              return;
+            }
+          }
+
           const response = await fetch(sourceUrl, { cache: "no-store" });
           if (!response.ok) {
             throw new Error("download failed");

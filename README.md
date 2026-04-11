@@ -27,10 +27,11 @@ MiniMax Token Plan Agent is a production-oriented multimodal client for MiniMax 
 - Multi-session text chat with local history
 - Chat workspace with session overview, timestamped messages, one-click message copy, and collapsible prompt/MCP area
 - Text-to-speech generation with advanced controls (speed, volume, pitch), task polling, and playback
-- Video generation with async task tracking (supports text/image/start-end/subject-ref modes)
+- Video generation with async task tracking (supports text/image/start-end/subject-ref modes), smooth local video playback using custom protocols
 - Image generation with preview and download
 - Music generation in instrumental and lyric modes
 - Local prompt reuse across all functional modules
+- Skills management with direct parsing and importing from GitHub repositories
 
 ### UX and Productivity
 

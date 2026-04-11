@@ -1,10 +1,22 @@
-import { app, BrowserWindow, ipcMain } from "electron";
+import { app, BrowserWindow, ipcMain, protocol, net } from "electron";
 import path from "node:path";
 import http from "node:http";
+import fs from "node:fs";
+import { pipeline } from "node:stream/promises";
 import handler from "serve-handler";
 import Store from "electron-store";
 
+app.commandLine.appendSwitch("ignore-gpu-blocklist");
+app.commandLine.appendSwitch("enable-gpu-rasterization");
+app.commandLine.appendSwitch("enable-zero-copy");
+app.commandLine.appendSwitch("enable-features", "PlatformHEVCDecoderSupport,CanvasOopRasterization");
+
 const store = new Store();
+
+// Register custom protocol
+protocol.registerSchemesAsPrivileged([
+  { scheme: 'local-media', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true, bypassCSP: true } }
+]);
 
 let staticServer;
 
@@ -49,6 +61,33 @@ async function createWindow() {
   
   ipcMain.handle('electron-store-delete', async (event, key) => {
     store.delete(key);
+  });
+
+  ipcMain.handle('download-media', async (event, { id, url }) => {
+    try {
+      const mediaDir = path.join(app.getPath("userData"), "media_cache");
+      if (!fs.existsSync(mediaDir)) {
+        fs.mkdirSync(mediaDir, { recursive: true });
+      }
+      const filePath = path.join(mediaDir, `${id}.mp4`);
+      if (fs.existsSync(filePath)) {
+        return `local-media://${filePath.replace(/\\/g, "/")}`;
+      }
+
+      const res = await fetch(url);
+      if (!res.ok) throw new Error("Fetch failed");
+      const fileStream = fs.createWriteStream(filePath);
+      await pipeline(res.body, fileStream);
+      return `local-media://${filePath.replace(/\\/g, "/")}`;
+    } catch (e) {
+      console.error("Download media error:", e);
+      return null;
+    }
+  });
+
+  protocol.handle('local-media', (request) => {
+    const filePath = decodeURIComponent(request.url.slice('local-media://'.length));
+    return net.fetch('file://' + filePath);
   });
 
   const isDev = process.env.ELECTRON_DEV === "1";

@@ -19,6 +19,8 @@ type RequestOptions = {
   body?: unknown;
   timeoutMs?: number;
   signal?: AbortSignal;
+  retries?: number;
+  initialBackoff?: number;
 };
 
 const buildUrl = (path: string) => {
@@ -31,14 +33,14 @@ const buildUrl = (path: string) => {
   return `${appConfig.apiBaseUrl}/${path}`;
 };
 
-export async function apiRequest<T>({
+async function doApiRequest<T>({
   path,
   method = "GET",
   apiKey,
   body,
   timeoutMs = DEFAULT_TIMEOUT,
   signal,
-}: RequestOptions): Promise<T> {
+}: Omit<RequestOptions, "retries" | "initialBackoff">): Promise<T> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
@@ -62,7 +64,13 @@ export async function apiRequest<T>({
       signal: controller.signal,
     });
 
-    const data = await response.json().catch(() => ({}));
+    let data;
+    try {
+      data = await response.json();
+    } catch {
+      data = {};
+    }
+
     const baseRespCode = data?.base_resp?.status_code;
     const message =
       data?.base_resp?.status_msg ||
@@ -88,4 +96,25 @@ export async function apiRequest<T>({
       signal.removeEventListener("abort", stopAbort);
     }
   }
+}
+
+export async function apiRequest<T>(options: RequestOptions): Promise<T> {
+  const { retries = 3, initialBackoff = 1000, ...rest } = options;
+  let attempt = 0;
+
+  while (attempt <= retries) {
+    try {
+      return await doApiRequest<T>(rest);
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 429 && attempt < retries) {
+        attempt++;
+        const delay = initialBackoff * Math.pow(2, attempt - 1);
+        console.warn(`[API] 429 Too Many Requests. Retrying in ${delay}ms (Attempt ${attempt} of ${retries})...`);
+        await new Promise((resolve) => setTimeout(resolve, delay));
+        continue;
+      }
+      throw error;
+    }
+  }
+  throw new Error("Unreachable");
 }

@@ -46,6 +46,7 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
     addSkill,
     removeSkill,
     setSkillApplied,
+    addRepositoryAndSkills,
   } = useSkillsStore();
   const [activeMenu, setActiveMenu] = useState<"system" | "prompt" | "skills" | "mcp">("system");
   const [localKey, setLocalKey] = useState(apiKey);
@@ -68,6 +69,8 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
   const [mcpDescription, setMcpDescription] = useState("");
   const [mcpJsonText, setMcpJsonText] = useState("");
   const [mcpImportFeedback, setMcpImportFeedback] = useState("");
+  const [isParsingRepo, setIsParsingRepo] = useState(false);
+  const [repoParseFeedback, setRepoParseFeedback] = useState("");
 
   const handleSave = () => {
     setRememberApiKey(rememberLocal);
@@ -207,6 +210,60 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
       importedCount += 1;
     });
     setMcpImportFeedback(`已处理 ${importedCount} 个 MCP 服务`);
+  };
+
+  const parseGithubRepo = async () => {
+    const url = repoUrl.trim();
+    if (!url) {
+      setRepoParseFeedback("请输入仓库地址");
+      return;
+    }
+    const match = url.match(/github\.com\/([^/]+)\/([^/]+)/);
+    if (!match) {
+      setRepoParseFeedback("仅支持解析 GitHub 仓库地址");
+      return;
+    }
+    const owner = match[1];
+    let repoNameStr = match[2];
+    if (repoNameStr.endsWith(".git")) repoNameStr = repoNameStr.slice(0, -4);
+
+    setIsParsingRepo(true);
+    setRepoParseFeedback("正在解析...");
+
+    try {
+      let res = await fetch(`https://api.github.com/repos/${owner}/${repoNameStr}/contents/skills`);
+      let data = await res.json();
+
+      if (!res.ok || !Array.isArray(data)) {
+        res = await fetch(`https://api.github.com/repos/${owner}/${repoNameStr}/contents`);
+        data = await res.json();
+        if (!res.ok || !Array.isArray(data)) {
+          throw new Error("无法获取仓库内容");
+        }
+      }
+
+      const dirs = data.filter((item: { type?: string; name?: string }) => item.type === "dir" || item.type === "tree");
+      if (dirs.length === 0) {
+        setRepoParseFeedback("未找到任何技能目录");
+        return;
+      }
+
+      const finalRepoName = repoName.trim() || `${owner}/${repoNameStr}`;
+      const skillsToAdd = dirs.map((dir: { name?: string }) => ({
+        name: dir.name || "Unknown",
+        command: dir.name || "Unknown",
+      }));
+
+      addRepositoryAndSkills(finalRepoName, url, skillsToAdd);
+
+      setRepoParseFeedback(`成功解析并添加了 ${skillsToAdd.length} 个技能`);
+      setRepoName("");
+      setRepoUrl("");
+    } catch (e: unknown) {
+      setRepoParseFeedback(`解析失败: ${e instanceof Error ? e.message : "未知错误"}`);
+    } finally {
+      setIsParsingRepo(false);
+    }
   };
 
   return (
@@ -458,9 +515,17 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
 
                 <div className="space-y-2">
                   <Label>添加仓库</Label>
-                  <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-3">
-                    <Input value={repoName} onChange={(e) => setRepoName(e.currentTarget.value)} placeholder="仓库名称" />
-                    <Input value={repoUrl} onChange={(e) => setRepoUrl(e.currentTarget.value)} placeholder="仓库地址" />
+                  <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto_auto] gap-3">
+                    <Input value={repoName} onChange={(e) => setRepoName(e.currentTarget.value)} placeholder="仓库名称（可选）" />
+                    <Input value={repoUrl} onChange={(e) => setRepoUrl(e.currentTarget.value)} placeholder="仓库地址 (如 https://github.com/MiniMax-AI/skills)" />
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      disabled={!repoUrl.trim() || isParsingRepo}
+                      onClick={parseGithubRepo}
+                    >
+                      {isParsingRepo ? "解析中..." : "从 GitHub 解析"}
+                    </Button>
                     <Button
                       type="button"
                       disabled={!repoName.trim() || !repoUrl.trim()}
@@ -472,9 +537,14 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
                         }
                       }}
                     >
-                      添加仓库
+                      手动添加
                     </Button>
                   </div>
+                  {repoParseFeedback && (
+                    <div className={`text-xs ${repoParseFeedback.includes("成功") ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400"}`}>
+                      {repoParseFeedback}
+                    </div>
+                  )}
                   <div className="max-h-36 overflow-y-auto space-y-2">
                     {repositories.map((repo) => (
                       <div key={repo.id} className="flex items-center justify-between rounded-xl border border-[var(--border)] px-3 py-2 dark:border-zinc-800">
