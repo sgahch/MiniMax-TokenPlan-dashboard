@@ -5,6 +5,9 @@
   "author": "MiniMax Team",
   "private": true,
   "main": "electron/main.mjs",
+  "bin": {
+    "mmx": "./bin/mmx"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -22,6 +25,7 @@
     "mobile:build:ios": "npm run build:web && cap sync ios",
     "mobile:open:android": "cap open android",
     "mobile:open:ios": "cap open ios",
+    "cli": "node ./bin/mmx",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit"
   },

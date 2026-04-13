@@ -1,0 +1,572 @@
+import { readFile, writeFile, mkdir, access } from "node:fs/promises";
+import { resolve, dirname, extname } from "node:path";
+import { homedir } from "node:os";
+import { fileURLToPath } from "node:url";
+
+const DEFAULT_BASE_URL_CN = "https://api.minimaxi.com/v1";
+const DEFAULT_BASE_URL_GLOBAL = "https://api.minimax.io/v1";
+const CONFIG_DIR = resolve(homedir(), ".mmx");
+const CONFIG_PATH = resolve(CONFIG_DIR, "config.json");
+
+const toCamel = (value) => value.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+
+const parseArgv = (argv) => {
+  const positionals = [];
+  const flags = {};
+  for (let i = 0; i < argv.length; i += 1) {
+    const token = argv[i];
+    if (!token.startsWith("--")) {
+      positionals.push(token);
+      continue;
+    }
+    const eqIdx = token.indexOf("=");
+    const keyRaw = eqIdx > -1 ? token.slice(2, eqIdx) : token.slice(2);
+    const key = toCamel(keyRaw);
+    const next = eqIdx > -1 ? token.slice(eqIdx + 1) : argv[i + 1];
+    const hasValue = eqIdx > -1 || (next && !next.startsWith("--"));
+    const value = hasValue ? next : true;
+    if (eqIdx === -1 && hasValue) {
+      i += 1;
+    }
+    if (flags[key] === undefined) {
+      flags[key] = value;
+    } else if (Array.isArray(flags[key])) {
+      flags[key].push(value);
+    } else {
+      flags[key] = [flags[key], value];
+    }
+  }
+  return { positionals, flags };
+};
+
+const ensureConfigDir = async () => {
+  await mkdir(CONFIG_DIR, { recursive: true });
+};
+
+const fileExists = async (path) => {
+  try {
+    await access(path);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+const readConfig = async () => {
+  if (!(await fileExists(CONFIG_PATH))) {
+    return {};
+  }
+  try {
+    const raw = await readFile(CONFIG_PATH, "utf-8");
+    return JSON.parse(raw);
+  } catch {
+    return {};
+  }
+};
+
+const writeConfig = async (config) => {
+  await ensureConfigDir();
+  await writeFile(CONFIG_PATH, `${JSON.stringify(config, null, 2)}\n`, "utf-8");
+};
+
+const pickBaseUrl = (config, flags) => {
+  if (typeof flags.baseUrl === "string" && flags.baseUrl.trim()) {
+    return flags.baseUrl.trim().replace(/\/$/, "");
+  }
+  if (typeof config.baseUrl === "string" && config.baseUrl.trim()) {
+    return config.baseUrl.trim().replace(/\/$/, "");
+  }
+  const region = typeof config.region === "string" ? config.region.toLowerCase() : "cn";
+  return (region === "global" ? DEFAULT_BASE_URL_GLOBAL : DEFAULT_BASE_URL_CN).replace(/\/$/, "");
+};
+
+const pickApiKey = (config, flags) => {
+  if (typeof flags.apiKey === "string" && flags.apiKey.trim()) {
+    return flags.apiKey.trim();
+  }
+  if (typeof process.env.MINIMAX_API_KEY === "string" && process.env.MINIMAX_API_KEY.trim()) {
+    return process.env.MINIMAX_API_KEY.trim();
+  }
+  if (typeof config.apiKey === "string" && config.apiKey.trim()) {
+    return config.apiKey.trim();
+  }
+  return "";
+};
+
+const requestJson = async ({ url, method = "GET", apiKey, body }) => {
+  const headers = {
+    "Content-Type": "application/json",
+  };
+  if (apiKey) {
+    headers.Authorization = `Bearer ${apiKey}`;
+    headers["x-api-key"] = apiKey;
+  }
+  const resp = await fetch(url, {
+    method,
+    headers,
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const data = await resp.json().catch(() => ({}));
+  const statusCode = data?.base_resp?.status_code;
+  if (!resp.ok || (typeof statusCode === "number" && statusCode !== 0)) {
+    const message = data?.base_resp?.status_msg || data?.error?.message || `HTTP ${resp.status}`;
+    throw new Error(message);
+  }
+  return data;
+};
+
+const sleep = (ms) => new Promise((resolveSleep) => setTimeout(resolveSleep, ms));
+
+const ensureApiKey = (key) => {
+  if (!key) {
+    throw new Error("未检测到 API Key，请先执行：mmx auth login --api-key sk-xxxx");
+  }
+};
+
+const printJson = (data) => {
+  process.stdout.write(`${JSON.stringify(data, null, 2)}\n`);
+};
+
+const parseMessages = (flags, trailingPositionals) => {
+  const rawMessages = flags.message;
+  const list = Array.isArray(rawMessages) ? rawMessages : rawMessages ? [rawMessages] : [];
+  if (list.length === 0 && trailingPositionals.length > 0) {
+    list.push(trailingPositionals.join(" "));
+  }
+  const messages = list.map((entry) => {
+    if (typeof entry !== "string") {
+      return { role: "user", content: String(entry) };
+    }
+    const splitIndex = entry.indexOf(":");
+    if (splitIndex > -1) {
+      const role = entry.slice(0, splitIndex);
+      if (role === "user" || role === "assistant" || role === "system") {
+        return { role, content: entry.slice(splitIndex + 1) };
+      }
+    }
+    return { role: "user", content: entry };
+  });
+  return messages;
+};
+
+const findFileDownloadUrl = async (baseUrl, apiKey, fileId) => {
+  const fileResp = await requestJson({
+    url: `${baseUrl}/files/retrieve?file_id=${encodeURIComponent(fileId)}`,
+    apiKey,
+  });
+  return fileResp?.file?.download_url;
+};
+
+const downloadToFile = async (url, outPath) => {
+  const resp = await fetch(url);
+  if (!resp.ok) {
+    throw new Error(`下载失败: HTTP ${resp.status}`);
+  }
+  const arrayBuffer = await resp.arrayBuffer();
+  await writeFile(resolve(process.cwd(), outPath), Buffer.from(arrayBuffer));
+};
+
+const pollAsyncTask = async ({ baseUrl, apiKey, taskId, type }) => {
+  const queryPath = type === "video" ? "/query/video_generation" : "/query/t2a_async_query_v2";
+  for (let i = 0; i < 120; i += 1) {
+    const data = await requestJson({
+      url: `${baseUrl}${queryPath}?task_id=${encodeURIComponent(taskId)}`,
+      apiKey,
+    });
+    const status = data.status ?? data.task_status;
+    if (status === "Success" || status === 2) {
+      const fileId = data.file_id || data?.data?.file_id || data?.task_info?.file_id;
+      if (!fileId) {
+        throw new Error("任务完成但未返回 file_id");
+      }
+      return fileId;
+    }
+    if (status === "Fail" || status === 3) {
+      throw new Error(data.error_message || "任务失败");
+    }
+    await sleep(3000);
+  }
+  throw new Error("任务轮询超时");
+};
+
+const readImageAsDataUri = async (value) => {
+  if (value.startsWith("http://") || value.startsWith("https://") || value.startsWith("data:")) {
+    return value;
+  }
+  const filePath = resolve(process.cwd(), value);
+  const ext = extname(filePath).toLowerCase();
+  const mimeMap = {
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".png": "image/png",
+    ".webp": "image/webp",
+  };
+  const mime = mimeMap[ext];
+  if (!mime) {
+    throw new Error("仅支持 jpg/jpeg/png/webp 图片");
+  }
+  const file = await readFile(filePath);
+  return `data:${mime};base64,${file.toString("base64")}`;
+};
+
+const showHelp = () => {
+  process.stdout.write([
+    "MiniMax TokenPlan CLI",
+    "",
+    "用法:",
+    "  mmx auth login --api-key sk-xxxx",
+    "  mmx auth status",
+    "  mmx config show",
+    "  mmx config set --key region --value cn",
+    "  mmx quota",
+    "  mmx text chat --message \"你好\"",
+    "  mmx image \"A cat in a spacesuit\"",
+    "  mmx image generate --prompt \"A cat\" --aspect-ratio 16:9",
+    "  mmx video generate --prompt \"Ocean waves\"",
+    "  mmx speech synthesize --text \"Hello\" --out hello.mp3",
+    "  mmx speech voices",
+    "  mmx music generate --prompt \"Upbeat pop\" --out song.mp3",
+    "  mmx search \"MiniMax AI\"",
+    "  mmx vision photo.jpg",
+    "",
+  ].join("\n"));
+};
+
+const main = async () => {
+  const { positionals, flags } = parseArgv(process.argv.slice(2));
+  const [group = "", action = "", ...rest] = positionals;
+  if (!group || group === "help" || group === "--help") {
+    showHelp();
+    return;
+  }
+
+  const config = await readConfig();
+  const apiKey = pickApiKey(config, flags);
+  const baseUrl = pickBaseUrl(config, flags);
+
+  if (group === "auth" && action === "login") {
+    const inputKey = typeof flags.apiKey === "string" ? flags.apiKey.trim() : "";
+    if (!inputKey) {
+      throw new Error("请通过 --api-key 提供密钥");
+    }
+    await writeConfig({ ...config, apiKey: inputKey });
+    process.stdout.write(`登录成功，凭据已写入 ${CONFIG_PATH}\n`);
+    return;
+  }
+
+  if (group === "auth" && action === "status") {
+    const active = pickApiKey(config, flags);
+    process.stdout.write(active ? "已登录\n" : "未登录\n");
+    return;
+  }
+
+  if (group === "auth" && action === "logout") {
+    const next = { ...config };
+    delete next.apiKey;
+    await writeConfig(next);
+    process.stdout.write("已退出登录\n");
+    return;
+  }
+
+  if (group === "config" && action === "show") {
+    printJson(config);
+    return;
+  }
+
+  if (group === "config" && action === "set") {
+    if (typeof flags.key !== "string") {
+      throw new Error("缺少 --key");
+    }
+    if (typeof flags.value !== "string") {
+      throw new Error("缺少 --value");
+    }
+    const keyMap = {
+      "api-key": "apiKey",
+      "base-url": "baseUrl",
+      "default-text-model": "defaultTextModel",
+      region: "region",
+    };
+    const rawKey = String(flags.key);
+    const mappedKey = keyMap[rawKey] || toCamel(rawKey);
+    const next = { ...config, [mappedKey]: String(flags.value) };
+    await writeConfig(next);
+    printJson(next);
+    return;
+  }
+
+  if (group === "config" && action === "export-schema") {
+    printJson({
+      type: "object",
+      properties: {
+        apiKey: { type: "string" },
+        baseUrl: { type: "string", enum: [DEFAULT_BASE_URL_CN, DEFAULT_BASE_URL_GLOBAL] },
+        region: { type: "string", enum: ["cn", "global"] },
+        defaultTextModel: { type: "string" },
+      },
+    });
+    return;
+  }
+
+  if (group === "quota") {
+    ensureApiKey(apiKey);
+    const quotaHost = baseUrl.includes("minimaxi.com") ? "https://api.minimaxi.com" : "https://api.minimax.io";
+    const quota = await requestJson({
+      url: `${quotaHost}/v1/api/openplatform/coding_plan/remains`,
+      apiKey,
+    });
+    printJson(quota);
+    return;
+  }
+
+  if (group === "text" && action === "chat") {
+    ensureApiKey(apiKey);
+    const messages = parseMessages(flags, rest);
+    if (messages.length === 0) {
+      throw new Error("请通过 --message 传入内容");
+    }
+    const model = typeof flags.model === "string" ? flags.model : config.defaultTextModel || "MiniMax-M2.7-highspeed";
+    const data = await requestJson({
+      url: `${baseUrl}/text/chatcompletion_v2`,
+      method: "POST",
+      apiKey,
+      body: {
+        model,
+        messages,
+      },
+    });
+    const text = data?.choices?.[0]?.message?.content;
+    process.stdout.write(`${text || JSON.stringify(data)}\n`);
+    return;
+  }
+
+  if (group === "image") {
+    ensureApiKey(apiKey);
+    const prompt = typeof flags.prompt === "string" ? flags.prompt : [action, ...rest].filter(Boolean).join(" ");
+    if (!prompt) {
+      throw new Error("请提供 prompt");
+    }
+    const image = await requestJson({
+      url: `${baseUrl}/image_generation`,
+      method: "POST",
+      apiKey,
+      body: {
+        model: typeof flags.model === "string" ? flags.model : "image-01",
+        prompt,
+        aspect_ratio: typeof flags.aspectRatio === "string" ? flags.aspectRatio : "1:1",
+        response_format: "base64",
+      },
+    });
+    printJson(image);
+    return;
+  }
+
+  if (group === "video" && action === "generate") {
+    ensureApiKey(apiKey);
+    const prompt = typeof flags.prompt === "string" ? flags.prompt : rest.join(" ");
+    if (!prompt) {
+      throw new Error("请提供 --prompt");
+    }
+    const created = await requestJson({
+      url: `${baseUrl}/video_generation`,
+      method: "POST",
+      apiKey,
+      body: {
+        prompt,
+        model: typeof flags.model === "string" ? flags.model : "MiniMax-Hailuo-2.3",
+        duration: flags.duration ? Number(flags.duration) : 6,
+        resolution: typeof flags.resolution === "string" ? flags.resolution : "768P",
+      },
+    });
+    const taskId = created.task_id;
+    process.stdout.write(`task_id: ${taskId}\n`);
+    if (typeof flags.download === "string") {
+      const fileId = await pollAsyncTask({ baseUrl, apiKey, taskId, type: "video" });
+      const fileUrl = await findFileDownloadUrl(baseUrl, apiKey, fileId);
+      if (!fileUrl) {
+        throw new Error("未获取到下载地址");
+      }
+      await downloadToFile(fileUrl, flags.download);
+      process.stdout.write(`已下载到 ${resolve(process.cwd(), flags.download)}\n`);
+    }
+    return;
+  }
+
+  if (group === "video" && action === "task" && rest[0] === "get") {
+    ensureApiKey(apiKey);
+    const taskId = typeof flags.taskId === "string" ? flags.taskId : "";
+    if (!taskId) {
+      throw new Error("缺少 --task-id");
+    }
+    const query = await requestJson({
+      url: `${baseUrl}/query/video_generation?task_id=${encodeURIComponent(taskId)}`,
+      apiKey,
+    });
+    printJson(query);
+    return;
+  }
+
+  if (group === "video" && action === "download") {
+    ensureApiKey(apiKey);
+    const fileId = typeof flags.fileId === "string" ? flags.fileId : "";
+    const out = typeof flags.out === "string" ? flags.out : "";
+    if (!fileId || !out) {
+      throw new Error("请提供 --file-id 与 --out");
+    }
+    const fileUrl = await findFileDownloadUrl(baseUrl, apiKey, fileId);
+    if (!fileUrl) {
+      throw new Error("未找到下载地址");
+    }
+    await downloadToFile(fileUrl, out);
+    process.stdout.write(`已下载到 ${resolve(process.cwd(), out)}\n`);
+    return;
+  }
+
+  if (group === "speech" && action === "synthesize") {
+    ensureApiKey(apiKey);
+    const text = typeof flags.text === "string" ? flags.text : rest.join(" ");
+    if (!text) {
+      throw new Error("请提供 --text");
+    }
+    const createData = await requestJson({
+      url: `${baseUrl}/t2a_async_v2`,
+      method: "POST",
+      apiKey,
+      body: {
+        model: typeof flags.model === "string" ? flags.model : "speech-2.8-hd",
+        text,
+        voice_setting: {
+          voice_id: typeof flags.voice === "string" ? flags.voice : "audiobook_male_1",
+          speed: flags.speed ? Number(flags.speed) : 1,
+          vol: 1,
+          pitch: 0,
+        },
+        audio_setting: {
+          sample_rate: 32000,
+          bitrate: 128000,
+          format: "mp3",
+          channel: 1,
+        },
+      },
+    });
+    const taskId = createData.task_id;
+    process.stdout.write(`task_id: ${taskId}\n`);
+    const fileId = await pollAsyncTask({ baseUrl, apiKey, taskId, type: "speech" });
+    const fileUrl = await findFileDownloadUrl(baseUrl, apiKey, fileId);
+    if (!fileUrl) {
+      throw new Error("未找到音频下载地址");
+    }
+    if (typeof flags.out === "string") {
+      await downloadToFile(fileUrl, flags.out);
+      process.stdout.write(`已下载到 ${resolve(process.cwd(), flags.out)}\n`);
+    } else {
+      process.stdout.write(`${fileUrl}\n`);
+    }
+    return;
+  }
+
+  if (group === "speech" && action === "voices") {
+    printJson({
+      voices: [
+        { id: "audiobook_male_1", label: "男声 (青叔音)" },
+        { id: "audiobook_male_2", label: "男声 (沉稳)" },
+        { id: "audiobook_female_1", label: "女声 (温柔)" },
+        { id: "audiobook_female_2", label: "女声 (甜美)" },
+        { id: "male-qn-qingse", label: "青年男声" },
+        { id: "female-shaonv", label: "少女音" },
+      ],
+    });
+    return;
+  }
+
+  if (group === "music" && action === "generate") {
+    ensureApiKey(apiKey);
+    const prompt = typeof flags.prompt === "string" ? flags.prompt : rest.join(" ");
+    if (!prompt) {
+      throw new Error("请提供 --prompt");
+    }
+    const data = await requestJson({
+      url: `${baseUrl}/music_generation`,
+      method: "POST",
+      apiKey,
+      body: {
+        model: typeof flags.model === "string" ? flags.model : "music-2.5",
+        prompt,
+        lyrics: typeof flags.lyrics === "string" ? flags.lyrics : undefined,
+        lyrics_optimizer: flags.lyricsOptimizer === true,
+        instrumental: flags.instrumental === true,
+        audio_setting: {
+          sample_rate: 44100,
+          bitrate: 256000,
+          format: "mp3",
+        },
+        output_format: "url",
+      },
+    });
+    const audioUrl = data?.data?.audio_url || data?.audio_url || data?.url || data?.data?.audio;
+    if (typeof flags.out === "string" && audioUrl) {
+      await downloadToFile(audioUrl, flags.out);
+      process.stdout.write(`已下载到 ${resolve(process.cwd(), flags.out)}\n`);
+      return;
+    }
+    process.stdout.write(`${audioUrl || JSON.stringify(data)}\n`);
+    return;
+  }
+
+  if (group === "search") {
+    ensureApiKey(apiKey);
+    const query = typeof flags.q === "string" ? flags.q : [action, ...rest].join(" ");
+    if (!query) {
+      throw new Error("请提供搜索词");
+    }
+    const data = await requestJson({
+      url: `${baseUrl}/coding_plan/search`,
+      method: "POST",
+      apiKey,
+      body: { q: query },
+    });
+    printJson(data);
+    return;
+  }
+
+  if (group === "vision") {
+    ensureApiKey(apiKey);
+    const image = typeof flags.image === "string" ? flags.image : action;
+    const fileId = typeof flags.fileId === "string" ? flags.fileId : "";
+    if (!image && !fileId) {
+      throw new Error("请提供图片路径/URL 或 --file-id");
+    }
+    const body = {
+      prompt: typeof flags.prompt === "string" ? flags.prompt : "Describe the image.",
+      ...(fileId ? { file_id: fileId } : { image_url: await readImageAsDataUri(image) }),
+    };
+    const data = await requestJson({
+      url: `${baseUrl}/coding_plan/vlm`,
+      method: "POST",
+      apiKey,
+      body,
+    });
+    process.stdout.write(`${data?.content || JSON.stringify(data)}\n`);
+    return;
+  }
+
+  if (group === "update") {
+    const packagePath = resolve(dirname(fileURLToPath(import.meta.url)), "../package.json");
+    let currentVersion = "0.0.0";
+    try {
+      const raw = await readFile(packagePath, "utf-8");
+      currentVersion = JSON.parse(raw).version || currentVersion;
+    } catch {
+      currentVersion = "0.0.0";
+    }
+    process.stdout.write(`当前版本: ${currentVersion}\n`);
+    process.stdout.write("该工程已具备基础 CLI 能力，更新请走 Git Tag + GitHub Actions 发布流程。\n");
+    return;
+  }
+
+  showHelp();
+};
+
+main().catch((error) => {
+  process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+  process.exit(1);
+});

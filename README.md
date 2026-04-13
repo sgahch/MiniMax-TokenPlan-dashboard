@@ -18,6 +18,7 @@ MiniMax Token Plan Agent is a production-oriented multimodal client for MiniMax 
 - Enlarged settings center with workspace summaries, searchable prompt operations, and product-style control panels
 - Token Plan status bar with live countdown, manual refresh, and automatic polling
 - Shared request and polling abstractions for long-running MiniMax tasks
+- Built-in `mmx` CLI with auth/config/quota and multimodal generation commands
 - Desktop packaging with Electron and mobile shell delivery with Capacitor
 
 ## Feature Set
@@ -33,6 +34,7 @@ MiniMax Token Plan Agent is a production-oriented multimodal client for MiniMax 
 - Music model options include `music-2.5` and `music-2.6` (default `music-2.6`)
 - Local prompt reuse across all functional modules
 - Skills management with direct parsing and importing from GitHub repositories
+- Terminal CLI: `auth / config / quota / text / image / video / speech / music / search / vision / update`
 
 ### UX and Productivity
 
@@ -73,9 +75,25 @@ MiniMax Token Plan Agent is a production-oriented multimodal client for MiniMax 
 ```bash
 npm install
 npm run dev
+npm run cli -- help
 ```
 
 Open `http://localhost:3000`.
+
+### CLI Quick Examples
+
+```bash
+npm run cli -- auth login --api-key sk-xxxxx
+npm run cli -- auth status
+npm run cli -- text chat --message "What is MiniMax?"
+npm run cli -- image "A cat in a spacesuit"
+npm run cli -- video generate --prompt "Ocean waves at sunset"
+npm run cli -- speech synthesize --text "Hello!" --out hello.mp3
+npm run cli -- music generate --prompt "Upbeat pop" --out song.mp3
+npm run cli -- search "MiniMax AI latest news"
+npm run cli -- vision photo.jpg
+npm run cli -- quota
+```
 
 ## Configuration
 
@@ -101,7 +119,10 @@ src/
   config/              # Runtime config merge and normalization
   lib/                 # API client, polling, token plan helpers
   store/               # Zustand stores
+bin/
+  mmx                  # CLI executable entry
 doc/
+  CLI能力差异梳理.md     # 对标官方CLI的差异与补全说明
   需求文档.md           # Product and architecture documentation
 ```
 
@@ -111,6 +132,7 @@ doc/
 npm run lint
 npm run typecheck
 npm run build
+npm run cli -- help
 ```
 
 ## Desktop and Mobile Packaging
