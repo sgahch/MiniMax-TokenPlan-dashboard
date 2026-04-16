@@ -1,56 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { Account, ModelRemain } from './types';
 import { fetchTokenPlanRemains } from './api';
-import type { Database } from 'sql.js';
-import initSqlJs from 'sql.js';
 
-// Database singleton
-let db: Database | null = null;
-
-const DB_STORAGE_KEY = 'token_plan_db';
-
-function saveDb(): void {
-  if (!db) return;
-  const data = db.export();
-  const buffer = new Uint8Array(data);
-  localStorage.setItem(DB_STORAGE_KEY, JSON.stringify(Array.from(buffer)));
-}
-
-async function initDb(): Promise<Database> {
-  const SQLModule = await initSqlJs({
-    locateFile: (_file: string) => '/sql-wasm.wasm'
-  });
-
-  // Try to load existing database from localStorage
-  const stored = localStorage.getItem(DB_STORAGE_KEY);
-  let database: Database;
-
-  if (stored) {
-    console.log('[DB] Loading existing database from localStorage...');
-    try {
-      const buffer = new Uint8Array(JSON.parse(stored));
-      database = new SQLModule.Database(buffer);
-    } catch {
-      console.log('[DB] Failed to load existing database, creating new one...');
-      database = new SQLModule.Database();
-    }
-  } else {
-    console.log('[DB] No existing database found, creating new one...');
-    database = new SQLModule.Database();
-  }
-
-  // Create accounts table if not exists
-  database.run(`
-    CREATE TABLE IF NOT EXISTS accounts (
-      id TEXT PRIMARY KEY,
-      name TEXT NOT NULL,
-      api_key TEXT NOT NULL,
-      created_at INTEGER DEFAULT (strftime('%s', 'now') * 1000)
-    )
-  `);
-
-  return database;
-}
+const API_BASE = 'http://localhost:5000/api';
 
 export interface AccountStatus {
   account: Account;
@@ -66,41 +18,44 @@ export function useAccounts() {
   const [darkMode, setDarkMode] = useState(false);
   const [dbReady, setDbReady] = useState(false);
 
-  // Initialize database
-  useEffect(() => {
-    initDb().then(database => {
-      db = database;
+  // 加载账号列表
+  const loadAccounts = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE}/accounts`);
+      if (!res.ok) throw new Error('获取账号失败');
+      const data = await res.json();
+      const loadedAccounts: Account[] = data.map((row: { id: string; name: string; api_key: string }) => ({
+        id: row.id,
+        name: row.name,
+        apiKey: row.api_key,
+      }));
+      setAccounts(loadedAccounts);
 
-      // Load accounts from DB
-      const result = db.exec('SELECT id, name, api_key FROM accounts ORDER BY created_at DESC');
-      if (result.length > 0) {
-        const rows = result[0].values;
-        const loadedAccounts = rows.map((row: unknown[]) => ({
-          id: row[0] as string,
-          name: row[1] as string,
-          apiKey: row[2] as string,
-        }));
-        setAccounts(loadedAccounts);
-
-        // Initialize status for loaded accounts
-        const initialStatusMap: Record<string, AccountStatus> = {};
-        for (const account of loadedAccounts) {
-          initialStatusMap[account.id] = { account, data: [], loading: false, error: '', lastFetched: 0 };
-        }
-        setStatusMap(initialStatusMap);
+      // 初始化 statusMap
+      const initialStatusMap: Record<string, AccountStatus> = {};
+      for (const account of loadedAccounts) {
+        initialStatusMap[account.id] = { account, data: [], loading: false, error: '', lastFetched: 0 };
       }
-
-      // Load dark mode preference
-      try {
-        const stored = localStorage.getItem('darkMode');
-        if (stored === 'true') setDarkMode(true);
-      } catch {}
-
-      setDbReady(true);
-    }).catch(console.error);
+      setStatusMap(initialStatusMap);
+    } catch (err) {
+      console.error('[DB] 加载账号失败:', err);
+    }
   }, []);
 
-  // Toggle dark mode
+  // 初始化
+  useEffect(() => {
+    loadAccounts();
+
+    // 加载 dark mode
+    try {
+      const stored = localStorage.getItem('darkMode');
+      if (stored === 'true') setDarkMode(true);
+    } catch {}
+
+    setDbReady(true);
+  }, [loadAccounts]);
+
+  // 切换 dark mode
   const toggleDarkMode = useCallback(() => {
     setDarkMode(prev => {
       const next = !prev;
@@ -109,59 +64,76 @@ export function useAccounts() {
     });
   }, []);
 
-  // Add account
+  // 添加账号
   const addAccount = useCallback(async (name: string, apiKey: string) => {
-    if (!db) return;
+    try {
+      const res = await fetch(`${API_BASE}/accounts`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, api_key: apiKey }),
+      });
+      if (!res.ok) throw new Error('添加账号失败');
+      const data = await res.json();
 
-    const id = crypto.randomUUID();
-    db.run('INSERT INTO accounts (id, name, api_key) VALUES (?, ?, ?)', [id, name, apiKey]);
-    saveDb();
+      const newAccount: Account = { id: data.id, name: data.name, apiKey: data.api_key };
+      console.log(`[Account] 添加账号 "${name}"（id: ${data.id}），即将拉取套餐数据...`);
+      setAccounts(prev => [newAccount, ...prev]);
+      setStatusMap(prev => ({
+        ...prev,
+        [data.id]: { account: newAccount, data: [], loading: false, error: '', lastFetched: 0 }
+      }));
 
-    const newAccount = { id, name, apiKey };
-    console.log(`[Account] 添加账号 "${name}"（id: ${id}），即将拉取套餐数据...`);
-    setAccounts(prev => [newAccount, ...prev]);
-    setStatusMap(prev => ({
-      ...prev,
-      [id]: { account: newAccount, data: [], loading: false, error: '', lastFetched: 0 }
-    }));
-
-    // Fetch data for new account
-    await refreshAccount(id);
-    console.log(`[Account] 账号 "${name}" 套餐数据拉取完成`);
+      await refreshAccount(data.id);
+      console.log(`[Account] 账号 "${name}" 套餐数据拉取完成`);
+    } catch (err) {
+      console.error('[Account] 添加账号失败:', err);
+      throw err;
+    }
   }, []);
 
-  // Remove account
-  const removeAccount = useCallback((id: string) => {
-    if (!db) return;
-
-    db.run('DELETE FROM accounts WHERE id = ?', [id]);
-    saveDb();
-    setAccounts(prev => prev.filter(a => a.id !== id));
-    setStatusMap(prev => {
-      const next = { ...prev };
-      delete next[id];
-      return next;
-    });
+  // 删除账号
+  const removeAccount = useCallback(async (id: string) => {
+    try {
+      const res = await fetch(`${API_BASE}/accounts/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('删除账号失败');
+      setAccounts(prev => prev.filter(a => a.id !== id));
+      setStatusMap(prev => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+    } catch (err) {
+      console.error('[Account] 删除账号失败:', err);
+      throw err;
+    }
   }, []);
 
-  // Update account
-  const updateAccount = useCallback((id: string, name: string, apiKey: string) => {
-    if (!db) return;
-
-    db.run('UPDATE accounts SET name = ?, api_key = ? WHERE id = ?', [name, apiKey, id]);
-    saveDb();
-    setAccounts(prev => prev.map(a => a.id === id ? { ...a, name, apiKey } : a));
+  // 更新账号
+  const updateAccount = useCallback(async (id: string, name: string, apiKey: string) => {
+    try {
+      const res = await fetch(`${API_BASE}/accounts/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, api_key: apiKey }),
+      });
+      if (!res.ok) throw new Error('更新账号失败');
+      setAccounts(prev => prev.map(a => a.id === id ? { ...a, name, apiKey } : a));
+    } catch (err) {
+      console.error('[Account] 更新账号失败:', err);
+      throw err;
+    }
   }, []);
 
-  // Refresh single account - must be stable for useEffect
+  // 刷新单个账号
   const refreshAccount = useCallback(async (id: string) => {
-    // Find account from current state
     const account = accounts.find(a => a.id === id);
     if (!account) return;
 
     setStatusMap(prev => {
       const existing = prev[id];
-      const accountData = existing ? { ...existing, account, loading: true, error: '' } : { account, data: [], loading: true, error: '', lastFetched: 0 };
+      const accountData = existing
+        ? { ...existing, account, loading: true, error: '' }
+        : { account, data: [], loading: true, error: '', lastFetched: 0 };
       return { ...prev, [id]: accountData };
     });
 
@@ -180,12 +152,12 @@ export function useAccounts() {
     }
   }, [accounts]);
 
-  // Refresh all accounts
+  // 刷新所有账号
   const refreshAll = useCallback(async () => {
     await Promise.all(accounts.map(a => refreshAccount(a.id)));
   }, [accounts, refreshAccount]);
 
-  // Auto refresh every 60 seconds
+  // 每 60 秒自动刷新
   useEffect(() => {
     if (accounts.length === 0 || !dbReady) return;
     const interval = setInterval(() => {
@@ -194,7 +166,7 @@ export function useAccounts() {
     return () => clearInterval(interval);
   }, [accounts, refreshAll, dbReady]);
 
-  // Initial fetch when accounts are loaded from DB
+  // 初始获取账号数据
   useEffect(() => {
     if (!dbReady) return;
     for (const account of accounts) {

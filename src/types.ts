@@ -49,14 +49,13 @@ export const formatDuration = (ms: number): string => {
   return `${seconds}秒`;
 };
 
-// 计算用量统计
-export const getUsageStats = (total: number, used: number) => {
+// 计算用量统计（API 返回 total 和 remaining）
+export const getUsageStats = (total: number, remaining: number) => {
   const safeTotal = Number.isFinite(total) && total > 0 ? total : 0;
-  const safeUsed = Number.isFinite(used) ? Math.max(0, used) : 0;
-  const available = Math.max(safeTotal - safeUsed, 0);
-  const ratio = safeTotal > 0 ? safeUsed / safeTotal : 0;
-  const percent = Math.max(0, Math.min(100, Math.round(ratio * 100)));
-  return { total: safeTotal, available, used: safeUsed, percent };
+  const safeRemaining = Number.isFinite(remaining) ? Math.max(0, remaining) : 0;
+  const used = Math.max(safeTotal - safeRemaining, 0);
+  const percent = safeTotal > 0 ? Math.round((used / safeTotal) * 100) : 0;
+  return { total: safeTotal, remaining: safeRemaining, used, percent };
 };
 
 // 构建进度条

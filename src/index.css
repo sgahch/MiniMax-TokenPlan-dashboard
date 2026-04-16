@@ -14,7 +14,10 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-.dark body {
-  background-color: #0f172a;
-  color: #f8fafc;
+/* 进度条字体等宽，防止抖动 */
+.progress-bar {
+  font-family: 'SF Mono', 'Fira Code', 'Fira Mono', 'Roboto Mono', monospace;
+  letter-spacing: -0.5px;
+  font-size: 0.6rem;
+  line-height: 1;
 }

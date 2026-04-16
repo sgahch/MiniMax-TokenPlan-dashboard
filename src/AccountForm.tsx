@@ -17,39 +17,44 @@ export function AccountForm({ initial, onSubmit, onCancel }: AccountFormProps) {
     onSubmit(name.trim(), apiKey.trim());
   };
 
+  const inputClass =
+    'w-full px-3.5 py-2.5 rounded-xl text-sm border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 text-slate-800 dark:text-slate-100 placeholder:text-slate-300 dark:placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-400 dark:focus:border-blue-500 transition-all';
+
   return (
-    <form onSubmit={handleSubmit} className="space-y-3 p-4 bg-slate-50 dark:bg-slate-800 rounded-xl">
+    <form onSubmit={handleSubmit} className="space-y-3">
       <div>
-        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">账号名称</label>
+        <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5">账号名称</label>
         <input
           type="text"
           value={name}
           onChange={e => setName(e.target.value)}
-          placeholder="例如: 我的主账号"
-          className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          placeholder="例如：主账号"
+          className={inputClass}
+          autoFocus
         />
       </div>
       <div>
-        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">API Key</label>
+        <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5">API Key</label>
         <input
           type="password"
           value={apiKey}
           onChange={e => setApiKey(e.target.value)}
           placeholder="sk-xxxxxxxx"
-          className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
+          className={`${inputClass} font-mono`}
         />
       </div>
-      <div className="flex gap-2 justify-end">
+      <div className="flex gap-2 pt-1">
         <button
           type="button"
           onClick={onCancel}
-          className="px-4 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700"
+          className="flex-1 py-2.5 text-sm rounded-xl border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
         >
           取消
         </button>
         <button
           type="submit"
-          className="px-4 py-2 text-sm rounded-lg bg-blue-600 text-white hover:bg-blue-700"
+          disabled={!name.trim() || !apiKey.trim()}
+          className="flex-1 py-2.5 text-sm rounded-xl bg-blue-600 text-white font-medium hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
         >
           {initial ? '保存' : '添加'}
         </button>
