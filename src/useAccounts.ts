@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import type { Account, ModelRemain } from './types';
 import { fetchTokenPlanRemains } from './api';
 
-const API_BASE = 'http://localhost:5000/api';
+const API_BASE = '/api';
 
 export interface AccountStatus {
   account: Account;
@@ -10,6 +10,15 @@ export interface AccountStatus {
   loading: boolean;
   error: string;
   lastFetched: number;
+}
+
+function getAuthHeaders(): Record<string, string> {
+  const token = localStorage.getItem('auth_token');
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  return headers;
 }
 
 export function useAccounts() {
@@ -21,7 +30,9 @@ export function useAccounts() {
   // 加载账号列表
   const loadAccounts = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE}/accounts`);
+      const res = await fetch(`${API_BASE}/accounts`, {
+        headers: getAuthHeaders()
+      });
       if (!res.ok) throw new Error('获取账号失败');
       const data = await res.json();
       const loadedAccounts: Account[] = data.map((row: { id: string; name: string; api_key: string }) => ({
@@ -69,7 +80,7 @@ export function useAccounts() {
     try {
       const res = await fetch(`${API_BASE}/accounts`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify({ name, api_key: apiKey }),
       });
       if (!res.ok) throw new Error('添加账号失败');
@@ -83,7 +94,8 @@ export function useAccounts() {
         [data.id]: { account: newAccount, data: [], loading: false, error: '', lastFetched: 0 }
       }));
 
-      await refreshAccount(data.id);
+      // 直接传入新账号对象刷新
+      await refreshAccountWithAccount(newAccount);
       console.log(`[Account] 账号 "${name}" 套餐数据拉取完成`);
     } catch (err) {
       console.error('[Account] 添加账号失败:', err);
@@ -94,7 +106,10 @@ export function useAccounts() {
   // 删除账号
   const removeAccount = useCallback(async (id: string) => {
     try {
-      const res = await fetch(`${API_BASE}/accounts/${id}`, { method: 'DELETE' });
+      const res = await fetch(`${API_BASE}/accounts/${id}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders()
+      });
       if (!res.ok) throw new Error('删除账号失败');
       setAccounts(prev => prev.filter(a => a.id !== id));
       setStatusMap(prev => {
@@ -113,7 +128,7 @@ export function useAccounts() {
     try {
       const res = await fetch(`${API_BASE}/accounts/${id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify({ name, api_key: apiKey }),
       });
       if (!res.ok) throw new Error('更新账号失败');
@@ -152,6 +167,31 @@ export function useAccounts() {
     }
   }, [accounts]);
 
+  // 直接用账号对象刷新（不依赖 state）
+  const refreshAccountWithAccount = useCallback(async (account: Account) => {
+    setStatusMap(prev => {
+      const existing = prev[account.id];
+      const accountData = existing
+        ? { ...existing, account, loading: true, error: '' }
+        : { account, data: [], loading: true, error: '', lastFetched: 0 };
+      return { ...prev, [account.id]: accountData };
+    });
+
+    try {
+      const data = await fetchTokenPlanRemains(account.apiKey);
+      setStatusMap(prev => ({
+        ...prev,
+        [account.id]: { account, data, loading: false, error: '', lastFetched: Date.now() }
+      }));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : '获取失败';
+      setStatusMap(prev => ({
+        ...prev,
+        [account.id]: { account, data: [], loading: false, error: message, lastFetched: Date.now() }
+      }));
+    }
+  }, []);
+
   // 刷新所有账号
   const refreshAll = useCallback(async () => {
     await Promise.all(accounts.map(a => refreshAccount(a.id)));
@@ -166,13 +206,13 @@ export function useAccounts() {
     return () => clearInterval(interval);
   }, [accounts, refreshAll, dbReady]);
 
-  // 初始获取账号数据
+  // 初始获取账号数据 - 账号加载后自动刷新
   useEffect(() => {
-    if (!dbReady) return;
+    if (!dbReady || accounts.length === 0) return;
     for (const account of accounts) {
       void refreshAccount(account.id);
     }
-  }, [dbReady]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [dbReady, accounts]);
 
   return {
     accounts,
