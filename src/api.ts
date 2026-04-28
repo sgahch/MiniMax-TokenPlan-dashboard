@@ -1,6 +1,16 @@
-import type { RemainsResponse, ModelRemain } from './types';
+import type { RemainsResponse, ModelRemain, DailyUsageResponse } from './types';
 
+const API_BASE = '/api';
 const DEFAULT_TIMEOUT = 120000;
+
+function getAuthHeaders(): Record<string, string> {
+  const token = localStorage.getItem('auth_token');
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  return headers;
+}
 
 async function apiRequest<T>({
   path,
@@ -84,4 +94,60 @@ export const fetchTokenPlanRemains = async (apiKey: string): Promise<ModelRemain
     console.error(`[API] fetchTokenPlanRemains 请求失败，apiKey: ${maskedKey}`, err);
     throw err;
   }
+};
+
+// 获取每日用量快照
+export const fetchDailyUsage = async (
+  accountId: string,
+  modelName: string,
+  weekStart: string
+): Promise<DailyUsageResponse> => {
+  const token = localStorage.getItem('auth_token');
+  if (!token) throw new Error('未登录');
+
+  const params = new URLSearchParams({ account_id: accountId, model_name: modelName, week_start: weekStart });
+  const res = await fetch(`${API_BASE}/usage/daily?${params}`, {
+    headers: getAuthHeaders(),
+  });
+  if (!res.ok) throw new Error('获取每日用量失败');
+  return res.json();
+};
+
+// 手动触发快照采集
+export const fetchCreateSnapshot = async (
+  snapshots: Array<{
+    account_id: string;
+    model_name: string;
+    weekly_usage: number;
+    weekly_total: number;
+    daily_usage: number;
+    week_start: string;
+  }>
+): Promise<{ success: boolean; snapshots_created: number; snapshots_updated: number }> => {
+  const token = localStorage.getItem('auth_token');
+  if (!token) throw new Error('未登录');
+
+  const res = await fetch(`${API_BASE}/usage/snapshots`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ snapshots }),
+  });
+  if (!res.ok) throw new Error('触发快照采集失败');
+  return res.json();
+};
+
+// 获取账号每日用量汇总
+export const fetchDailyUsageSummary = async (
+  accountId: string,
+  weekStart: string
+): Promise<DailyUsageResponse> => {
+  const token = localStorage.getItem('auth_token');
+  if (!token) throw new Error('未登录');
+
+  const params = new URLSearchParams({ account_id: accountId, week_start: weekStart });
+  const res = await fetch(`${API_BASE}/usage/daily-summary?${params}`, {
+    headers: getAuthHeaders(),
+  });
+  if (!res.ok) throw new Error('获取每日用量汇总失败');
+  return res.json();
 };

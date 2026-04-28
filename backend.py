@@ -9,12 +9,15 @@ from flask_cors import CORS
 import pymysql
 from contextlib import contextmanager
 import requests
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from functools import wraps
 import uuid
 import jwt
 import hashlib
 import base64
+
+# APScheduler for daily snapshot collection
+from apscheduler.schedulers.background import BackgroundScheduler
 
 app = Flask(__name__)
 CORS(app)
@@ -97,6 +100,29 @@ def init_database():
                     INDEX idx_created_at (created_at),
                     INDEX idx_user_id (user_id),
                     INDEX idx_group_id (group_id)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+            """)
+
+            # 创建每日用量快照表
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS daily_usage_snapshots (
+                    id VARCHAR(36) PRIMARY KEY,
+                    account_id VARCHAR(36) NOT NULL,
+                    model_name VARCHAR(255) NOT NULL,
+                    week_start_date DATE NOT NULL,
+                    weekly_total_count INT DEFAULT 0,
+                    mon_usage INT DEFAULT 0,
+                    tue_usage INT DEFAULT 0,
+                    wed_usage INT DEFAULT 0,
+                    thu_usage INT DEFAULT 0,
+                    fri_usage INT DEFAULT 0,
+                    sat_usage INT DEFAULT 0,
+                    sun_usage INT DEFAULT 0,
+                    current_day INT DEFAULT 1,
+                    created_at BIGINT,
+                    updated_at BIGINT,
+                    UNIQUE KEY uk_account_model_week (account_id, model_name, week_start_date),
+                    INDEX idx_week_start_date (week_start_date)
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
             """)
 
@@ -512,6 +538,310 @@ def get_all_remains():
     return jsonify(results)
 
 
+# ============ 用量快照 API ============
+
+@app.route('/api/usage/snapshots', methods=['POST'])
+@jwt_required
+def create_usage_snapshot():
+    """接收前端采集的每日用量快照数据"""
+    data = request.get_json()
+    if not data or not data.get('snapshots'):
+        return jsonify({'error': 'snapshots 数据必填'}), 400
+
+    snapshots = data['snapshots']  # [{account_id, model_name, weekly_usage, weekly_total, week_start}, ...]
+    today = date.today()
+    # today.weekday() 返回 0=周一, 1=周二, ..., 6=周日
+    day_columns = ['mon_usage', 'tue_usage', 'wed_usage', 'thu_usage', 'fri_usage', 'sat_usage', 'sun_usage']
+    today_column = day_columns[today.weekday()]
+
+    snapshots_created = 0
+    snapshots_updated = 0
+
+    with get_db() as cursor:
+        for snapshot in snapshots:
+            account_id = snapshot['account_id']
+            model_name = snapshot['model_name']
+            weekly_usage = snapshot.get('weekly_usage', 0)  # 存储已用量
+            weekly_total = snapshot.get('weekly_total', 0)
+            week_start_str = snapshot.get('week_start', '')
+
+            # 解析 week_start
+            if week_start_str:
+                week_start = datetime.strptime(week_start_str, '%Y-%m-%d').date()
+            else:
+                week_start = today - timedelta(days=today.weekday())
+
+            now = int(datetime.now().timestamp() * 1000)
+
+            # 检查是否已存在记录
+            cursor.execute(
+                'SELECT id, mon_usage, tue_usage, wed_usage, thu_usage, fri_usage, sat_usage, sun_usage FROM daily_usage_snapshots WHERE account_id = %s AND model_name = %s AND week_start_date = %s',
+                (account_id, model_name, week_start)
+            )
+            existing = cursor.fetchone()
+
+            if existing:
+                # 如果是周一，重置所有其他天的数据
+                if today.weekday() == 0:
+                    reset_sql = ', '.join([f'{col} = 0' for col in day_columns])
+                    cursor.execute(
+                        f"UPDATE daily_usage_snapshots SET {reset_sql}, {today_column} = %s, weekly_total_count = %s, updated_at = %s WHERE id = %s",
+                        (weekly_usage, weekly_total, now, existing['id'])
+                    )
+                else:
+                    cursor.execute(
+                        f"UPDATE daily_usage_snapshots SET {today_column} = %s, weekly_total_count = %s, current_day = %s, updated_at = %s WHERE id = %s",
+                        (weekly_usage, weekly_total, today.weekday() + 1, now, existing['id'])
+                    )
+                snapshots_updated += 1
+            else:
+                # 新建记录，其他天默认为0
+                snapshot_id = str(uuid.uuid4())
+                col_values = {col: 0 for col in day_columns}
+                col_values[today_column] = weekly_usage
+                cursor.execute("""
+                    INSERT INTO daily_usage_snapshots
+                    (id, account_id, model_name, week_start_date, weekly_total_count, mon_usage, tue_usage, wed_usage, thu_usage, fri_usage, sat_usage, sun_usage, current_day, created_at, updated_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """, (
+                    snapshot_id, account_id, model_name, week_start, weekly_total,
+                    col_values['mon_usage'], col_values['tue_usage'], col_values['wed_usage'],
+                    col_values['thu_usage'], col_values['fri_usage'], col_values['sat_usage'],
+                    col_values['sun_usage'], today.weekday() + 1, now, now
+                ))
+                snapshots_created += 1
+
+    print(f"[Snapshot] Saved: created={snapshots_created}, updated={snapshots_updated}")
+
+    return jsonify({
+        'success': True,
+        'snapshot_date': str(today),
+        'week_start': str(week_start),
+        'snapshots_created': snapshots_created,
+        'snapshots_updated': snapshots_updated,
+    })
+
+
+@app.route('/api/usage/daily', methods=['GET'])
+@jwt_required
+def get_daily_usage():
+    """获取指定账号+模型的某周每日用量"""
+    account_id = request.args.get('account_id')
+    model_name = request.args.get('model_name')
+    week_start = request.args.get('week_start')  # YYYY-MM-DD 格式
+
+    if not account_id or not model_name or not week_start:
+        return jsonify({'error': 'account_id, model_name, week_start 参数必填'}), 400
+
+    week_start_date = datetime.strptime(week_start, '%Y-%m-%d').date()
+
+    with get_db() as cursor:
+        # 获取该周所有快照
+        cursor.execute("""
+            SELECT snapshot_date, daily_usage_count, weekly_usage_at_snapshot, weekly_total_count
+            FROM daily_usage_snapshots
+            WHERE account_id = %s AND model_name = %s AND week_start_date = %s
+            ORDER BY snapshot_date ASC
+        """, (account_id, model_name, week_start_date))
+        snapshots = cursor.fetchall()
+
+    day_names = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
+    daily_usage = []
+
+    for i in range(7):
+        day_date = week_start_date + timedelta(days=i)
+        day_str = str(day_date)
+
+        # 查找该天的快照
+        snapshot = next((s for s in snapshots if str(s['snapshot_date']) == day_str), None)
+
+        usage = snapshot['daily_usage_count'] if snapshot else 0
+        weekly_used = snapshot['weekly_usage_at_snapshot'] if snapshot else 0
+        weekly_total = snapshot['weekly_total_count'] if snapshot else 0
+
+        # 计算环比变化
+        percent_change = None
+        if i > 0 and daily_usage[i-1]['usage'] > 0:
+            prev_usage = daily_usage[i-1]['usage']
+            percent_change = round(((usage - prev_usage) / prev_usage) * 100, 2)
+
+        daily_usage.append({
+            'date': day_str,
+            'day': day_names[i],
+            'usage': usage,
+            'percent_change': percent_change,
+            'weekly_used': weekly_used,
+            'weekly_total': weekly_total
+        })
+
+    return jsonify({
+        'account_id': account_id,
+        'model_name': model_name,
+        'week_start': week_start,
+        'week_end': str(week_start_date + timedelta(days=6)),
+        'daily_usage': daily_usage
+    })
+
+
+@app.route('/api/usage/daily-summary', methods=['GET'])
+@jwt_required
+def get_daily_usage_summary():
+    """获取账号下所有模型的每日用量汇总"""
+    account_id = request.args.get('account_id')
+    week_start = request.args.get('week_start')  # YYYY-MM-DD 格式
+
+    if not account_id or not week_start:
+        return jsonify({'error': 'account_id, week_start 参数必填'}), 400
+
+    week_start_date = datetime.strptime(week_start, '%Y-%m-%d').date()
+
+    with get_db() as cursor:
+        # 获取该账号该周所有模型的快照，按周汇总
+        cursor.execute("""
+            SELECT
+                SUM(mon_usage) as mon_usage,
+                SUM(tue_usage) as tue_usage,
+                SUM(wed_usage) as wed_usage,
+                SUM(thu_usage) as thu_usage,
+                SUM(fri_usage) as fri_usage,
+                SUM(sat_usage) as sat_usage,
+                SUM(sun_usage) as sun_usage,
+                MAX(weekly_total_count) as weekly_total
+            FROM daily_usage_snapshots
+            WHERE account_id = %s AND week_start_date = %s
+        """, (account_id, week_start_date))
+        row = cursor.fetchone()
+
+    day_names = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
+    day_columns = ['mon_usage', 'tue_usage', 'wed_usage', 'thu_usage', 'fri_usage', 'sat_usage', 'sun_usage']
+    daily_usage = []
+
+    for i in range(7):
+        day_date = week_start_date + timedelta(days=i)
+        day_str = str(day_date)
+        usage = row[day_columns[i]] if row and row[day_columns[i]] else 0
+
+        percent_change = None
+        if i > 0 and len(daily_usage) > 0 and daily_usage[i-1]['usage'] > 0:
+            prev_usage = daily_usage[i-1]['usage']
+            percent_change = round(((usage - prev_usage) / prev_usage) * 100, 2)
+
+        daily_usage.append({
+            'date': day_str,
+            'day': day_names[i],
+            'usage': usage,
+            'percent_change': percent_change,
+            'weekly_used': usage,  # 当天已用量
+            'weekly_total': row['weekly_total'] if row and row['weekly_total'] else 0
+        })
+
+    return jsonify({
+        'account_id': account_id,
+        'week_start': week_start,
+        'week_end': str(week_start_date + timedelta(days=6)),
+        'daily_usage': daily_usage
+    })
+
+
+def collect_all_snapshots():
+    """后台定时任务：每日自动采集所有账号快照"""
+    with app.app_context():
+        try:
+            with get_db() as cursor:
+                cursor.execute('SELECT id, api_key FROM accounts')
+                accounts = cursor.fetchall()
+
+            today = date.today()
+            week_start = today - timedelta(days=today.weekday())
+            day_columns = ['mon_usage', 'tue_usage', 'wed_usage', 'thu_usage', 'fri_usage', 'sat_usage', 'sun_usage']
+            today_column = day_columns[today.weekday()]
+
+            print(f"[Snapshot] Starting daily collection for {today}, today_column={today_column}")
+
+            for acc in accounts:
+                try:
+                    resp = requests.post(
+                        MINIMAX_API_URL,
+                        headers={'Authorization': f'Bearer {acc["api_key"]}'},
+                        json={'model': '*'},
+                        timeout=120
+                    )
+                    resp.raise_for_status()
+                    data = resp.json()
+
+                    model_remains = data.get('model_remains', []) if isinstance(data, dict) else []
+
+                    with get_db() as cursor:
+                        for model in model_remains:
+                            model_name = model.get('model_name', 'unknown')
+                            # 只处理 MiniMax-M* 模型
+                            if not model_name.startswith('MiniMax-M'):
+                                continue
+
+                            # current_weekly_usage_count 实际上是剩余额度，已用量 = 总额 - 剩余
+                            weekly_usage = model.get('current_weekly_total_count', 0) - model.get('current_weekly_usage_count', 0)
+                            weekly_total = model.get('current_weekly_total_count', 0)
+
+                            # 检查是否已存在记录
+                            cursor.execute(
+                                'SELECT id FROM daily_usage_snapshots WHERE account_id = %s AND model_name = %s AND week_start_date = %s',
+                                (acc['id'], model_name, week_start)
+                            )
+                            existing = cursor.fetchone()
+
+                            now = int(datetime.now().timestamp() * 1000)
+
+                            if existing:
+                                # 如果是周一，重置所有其他天的数据
+                                if today.weekday() == 0:
+                                    reset_sql = ', '.join([f'{col} = 0' for col in day_columns])
+                                    cursor.execute(
+                                        f"UPDATE daily_usage_snapshots SET {reset_sql}, {today_column} = %s, weekly_total_count = %s, updated_at = %s WHERE id = %s",
+                                        (weekly_usage, weekly_total, now, existing['id'])
+                                    )
+                                else:
+                                    cursor.execute(
+                                        f"UPDATE daily_usage_snapshots SET {today_column} = %s, weekly_total_count = %s, current_day = %s, updated_at = %s WHERE id = %s",
+                                        (weekly_usage, weekly_total, today.weekday() + 1, now, existing['id'])
+                                    )
+                            else:
+                                # 新建记录
+                                snapshot_id = str(uuid.uuid4())
+                                col_values = {col: 0 for col in day_columns}
+                                col_values[today_column] = weekly_usage
+                                cursor.execute("""
+                                    INSERT INTO daily_usage_snapshots
+                                    (id, account_id, model_name, week_start_date, weekly_total_count, mon_usage, tue_usage, wed_usage, thu_usage, fri_usage, sat_usage, sun_usage, current_day, created_at, updated_at)
+                                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                                """, (
+                                    snapshot_id, acc['id'], model_name, week_start, weekly_total,
+                                    col_values['mon_usage'], col_values['tue_usage'], col_values['wed_usage'],
+                                    col_values['thu_usage'], col_values['fri_usage'], col_values['sat_usage'],
+                                    col_values['sun_usage'], today.weekday() + 1, now, now
+                                ))
+
+                    print(f"[Snapshot] Account {acc['id']} collected")
+                except Exception as e:
+                    print(f"[Snapshot] Error for account {acc['id']}: {e}")
+
+            print(f"[Snapshot] Daily collection completed for {today}")
+        except Exception as e:
+            print(f"[Snapshot] Scheduled collection failed: {e}")
+
+
+# 启动定时任务调度器
+scheduler = BackgroundScheduler()
+scheduler.add_job(
+    func=collect_all_snapshots,
+    trigger='cron',
+    hour=23,
+    minute=30,
+    timezone='Asia/Shanghai'
+)
+
+
 if __name__ == '__main__':
     init_database()
+    scheduler.start()
+    print("[Scheduler] Daily snapshot collection scheduled at 23:30 Asia/Shanghai")
     app.run(host='0.0.0.0', port=5000, debug=False, use_reloader=False)

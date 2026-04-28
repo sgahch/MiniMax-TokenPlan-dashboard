@@ -17,6 +17,24 @@ export interface RemainsResponse {
   model_remains?: ModelRemain[];
 }
 
+// 每日用量快照
+export interface DailyUsageItem {
+  date: string;
+  day: string;
+  usage: number;
+  percent_change: number | null;
+  weekly_used: number;
+  weekly_total: number;
+}
+
+export interface DailyUsageResponse {
+  account_id: string;
+  model_name: string;
+  week_start: string;
+  week_end: string;
+  daily_usage: DailyUsageItem[];
+}
+
 export interface ApiError {
   message: string;
   status?: number;

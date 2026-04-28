@@ -1,18 +1,30 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
+import {
+  Search, RefreshCw, Plus, Moon, Sun, LogOut, KeyRound, LayoutGrid,
+  Trash2, Download, X, Settings, Camera,
+  CheckSquare, Square, ArrowUpDown, Filter,
+} from 'lucide-react';
 import { useAccounts } from './useAccounts';
 import { AccountCard } from './AccountCard';
 import { AccountForm } from './AccountForm';
 import { useAuth } from './useAuth';
 import { useGroups } from './useGroups';
+import { useToast } from './hooks/useToast';
+import { ToastContainer } from './components/Toast';
+import { ConfirmModal } from './components/ConfirmModal';
+import { DashboardStats } from './components/DashboardStats';
+import { UsageCharts } from './components/UsageCharts';
+import { SkeletonStats } from './components/Skeleton';
 import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
 import { ChangePasswordPage } from './pages/ChangePasswordPage';
 import type { Account } from './types';
 
 type AuthView = 'login' | 'register';
+type SortBy = 'name' | 'created' | 'usage';
 
 export default function App() {
-  const { user, logout, loading, isAuthenticated } = useAuth();
+  const { user, logout, loading: authLoading, isAuthenticated } = useAuth();
   const {
     accounts,
     statusMap,
@@ -23,35 +35,170 @@ export default function App() {
     updateAccount,
     refreshAccount,
     refreshAll,
+    dbReady,
   } = useAccounts();
   const { groups, addGroup, removeGroup, renameGroup } = useGroups();
+  const { toasts, addToast, removeToast } = useToast();
 
   const [authView, setAuthView] = useState<AuthView>('login');
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingAccount, setEditingAccount] = useState<Account | null>(null);
-  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
-  const [globalCollapsed, setGlobalCollapsed] = useState(true);
   const [showChangePassword, setShowChangePassword] = useState(false);
+
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [showGroupManager, setShowGroupManager] = useState(false);
   const [editingGroup, setEditingGroup] = useState<{ id: string; name: string } | null>(null);
   const [newGroupName, setNewGroupName] = useState('');
   const [showAddGroup, setShowAddGroup] = useState(false);
 
-  const filteredAccounts = selectedGroupId
-    ? accounts.filter(a => a.groupId === selectedGroupId)
-    : accounts;
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sortBy, setSortBy] = useState<SortBy>('created');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [globalCollapsed, setGlobalCollapsed] = useState(true);
+  const [chartViewMode, setChartViewMode] = useState<'interval' | 'weekly'>('interval');
+  const [confirmBatchDelete, setConfirmBatchDelete] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
+  // 筛选和排序
+  const filteredAccounts = useMemo(() => {
+    let list = selectedGroupId
+      ? accounts.filter(a => a.groupId === selectedGroupId)
+      : [...accounts];
+
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      list = list.filter(a => a.name.toLowerCase().includes(q) || a.apiKey.toLowerCase().includes(q));
+    }
+
+    list.sort((a, b) => {
+      let cmp = 0;
+      if (sortBy === 'name') {
+        cmp = a.name.localeCompare(b.name);
+      } else if (sortBy === 'created') {
+        cmp = 0; // created_at 目前在 Account 类型中没有，按索引排序
+      } else if (sortBy === 'usage') {
+        const usageA = statusMap[a.id]?.data.reduce((sum, m) => sum + ((m.current_interval_total_count || 0) - (m.current_interval_usage_count || 0)), 0) || 0;
+        const usageB = statusMap[b.id]?.data.reduce((sum, m) => sum + ((m.current_interval_total_count || 0) - (m.current_interval_usage_count || 0)), 0) || 0;
+        cmp = usageA - usageB;
+      }
+      return sortOrder === 'asc' ? cmp : -cmp;
+    });
+
+    return list;
+  }, [accounts, selectedGroupId, searchQuery, sortBy, sortOrder, statusMap]);
+
+  // 全选切换
+  const allSelected = filteredAccounts.length > 0 && filteredAccounts.every(a => selectedIds.has(a.id));
+  const toggleSelectAll = () => {
+    if (allSelected) {
+      setSelectedIds(prev => {
+        const next = new Set(prev);
+        filteredAccounts.forEach(a => next.delete(a.id));
+        return next;
+      });
+    } else {
+      setSelectedIds(prev => {
+        const next = new Set(prev);
+        filteredAccounts.forEach(a => next.add(a.id));
+        return next;
+      });
+    }
+  };
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  // 批量刷新
+  const handleBatchRefresh = async () => {
+    if (selectedIds.size === 0) return;
+    addToast(`正在刷新 ${selectedIds.size} 个账号...`, 'info');
+    await Promise.all(Array.from(selectedIds).map(id => refreshAccount(id)));
+    addToast('批量刷新完成', 'success');
+  };
+
+  // 批量删除
+  const handleBatchDelete = async () => {
+    const ids = Array.from(selectedIds);
+    for (const id of ids) {
+      await removeAccount(id);
+    }
+    setSelectedIds(new Set());
+    setConfirmBatchDelete(false);
+    addToast(`已删除 ${ids.length} 个账号`, 'success');
+  };
+
+  // 导出数据
+  const handleExport = (format: 'json' | 'csv') => {
+    const data = filteredAccounts.map(acc => {
+      const status = statusMap[acc.id];
+      return {
+        name: acc.name,
+        apiKey: acc.apiKey,
+        group: groups.find(g => g.id === acc.groupId)?.name || '无分组',
+        models: status?.data.map(m => ({
+          model: m.model_name,
+          intervalTotal: m.current_interval_total_count,
+          intervalUsed: m.current_interval_usage_count,
+          weeklyTotal: m.current_weekly_total_count,
+          weeklyUsed: m.current_weekly_usage_count,
+          remainingTime: m.remains_time,
+        })) || [],
+        error: status?.error || null,
+      };
+    });
+
+    if (format === 'json') {
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `token-plan-export-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      addToast('JSON 导出成功', 'success');
+    } else {
+      const rows: string[] = [];
+      rows.push('账号名称,分组,模型,周期总量,周期已用,周期剩余,本周总量,本周已用,剩余时间');
+      for (const item of data) {
+        if (item.models.length === 0) {
+          rows.push(`${item.name},${item.group},,0,0,0,0,0,`);
+        } else {
+          for (const m of item.models) {
+            rows.push(`${item.name},${item.group},${m.model},${m.intervalTotal},${m.intervalUsed},${m.intervalTotal - m.intervalUsed},${m.weeklyTotal},${m.weeklyUsed},${m.remainingTime}`);
+          }
+        }
+      }
+      const blob = new Blob([rows.join('\n')], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `token-plan-export-${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+      addToast('CSV 导出成功', 'success');
+    }
+  };
 
   const handleAddAccount = async (name: string, apiKey: string, groupId: string | null) => {
     await addAccount(name, apiKey, groupId);
     setShowAddForm(false);
     setGlobalCollapsed(true);
+    addToast('账号添加成功', 'success');
   };
 
   const handleUpdateAccount = (name: string, apiKey: string, groupId: string | null) => {
     if (editingAccount) {
       updateAccount(editingAccount.id, name, apiKey, groupId);
       setEditingAccount(null);
+      addToast('账号更新成功', 'success');
     }
   };
 
@@ -60,6 +207,7 @@ export default function App() {
     await addGroup(newGroupName.trim());
     setNewGroupName('');
     setShowAddGroup(false);
+    addToast('分组创建成功', 'success');
   };
 
   const handleRenameGroup = async () => {
@@ -67,33 +215,33 @@ export default function App() {
     await renameGroup(editingGroup.id, newGroupName.trim());
     setEditingGroup(null);
     setNewGroupName('');
+    addToast('分组重命名成功', 'success');
   };
 
   const handleDeleteGroup = async (id: string) => {
     await removeGroup(id);
-    if (selectedGroupId === id) {
-      setSelectedGroupId(null);
-    }
+    if (selectedGroupId === id) setSelectedGroupId(null);
+    addToast('分组删除成功', 'success');
   };
 
-  const handleDelete = async (id: string) => {
-    if (confirmDelete === id) {
-      await removeAccount(id);
-      setConfirmDelete(null);
-    } else {
-      setConfirmDelete(id);
-      setTimeout(() => setConfirmDelete(null), 3000);
-    }
+  const handleDeleteAccount = async (id: string) => {
+    await removeAccount(id);
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+    addToast('账号已删除', 'success');
   };
 
-  if (loading) {
+  if (authLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #eef2ff 0%, #e0e7ff 50%, #fdf4ff 100%)' }}>
-        <div className="text-center">
-          <div className="w-12 h-12 mx-auto mb-4 rounded-2xl glass flex items-center justify-center animate-float">
-            <span className="text-2xl">🎯</span>
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950">
+        <div className="text-center animate-fade-in">
+          <div className="w-14 h-14 mx-auto mb-4 rounded-2xl glass flex items-center justify-center animate-float shadow-glow">
+            <LayoutGrid className="w-7 h-7 text-primary-500" />
           </div>
-          <p className="text-sm text-indigo-400">加载中...</p>
+          <p className="text-sm text-slate-400 font-medium">加载中...</p>
         </div>
       </div>
     );
@@ -109,157 +257,328 @@ export default function App() {
 
   return (
     <div className={darkMode ? 'dark' : ''}>
-      <div className="fixed inset-0 -z-10 overflow-hidden">
-        <div className="absolute -top-48 -left-48 w-[500px] h-[500px] rounded-full bg-gradient-to-br from-indigo-300 via-purple-300 to-pink-300 blur-[100px] opacity-20 dark:opacity-10" />
-        <div className="absolute top-1/3 -right-48 w-[400px] h-[400px] rounded-full bg-gradient-to-br from-cyan-300 via-indigo-300 to-purple-300 blur-[100px] opacity-15 dark:opacity-10" />
-        <div className="absolute -bottom-24 left-1/3 w-[600px] h-[600px] rounded-full bg-gradient-to-br from-pink-300 via-purple-300 to-indigo-300 blur-[120px] opacity-15 dark:opacity-10" />
+      {/* 背景装饰 */}
+      <div className="fixed inset-0 -z-10 overflow-hidden pointer-events-none">
+        <div className="absolute -top-40 -left-40 w-[500px] h-[500px] rounded-full bg-gradient-to-br from-primary-300/20 via-violet-300/20 to-pink-300/20 blur-[100px] dark:from-primary-500/10 dark:via-violet-500/10 dark:to-pink-500/10" />
+        <div className="absolute top-1/3 -right-40 w-[400px] h-[400px] rounded-full bg-gradient-to-br from-cyan-300/20 via-primary-300/20 to-violet-300/20 blur-[100px] dark:from-cyan-500/10 dark:via-primary-500/10 dark:to-violet-500/10" />
+        <div className="absolute -bottom-20 left-1/3 w-[600px] h-[600px] rounded-full bg-gradient-to-br from-pink-300/20 via-violet-300/20 to-primary-300/20 blur-[120px] dark:from-pink-500/10 dark:via-violet-500/10 dark:to-primary-500/10" />
       </div>
 
-      <div className="flex min-h-screen bg-gradient-to-br from-indigo-50/50 via-white/50 to-purple-50/50 dark:from-slate-900 dark:via-slate-900 dark:to-slate-900 transition-colors duration-300">
+      {/* Toast */}
+      <ToastContainer toasts={toasts} onRemove={removeToast} />
+
+      <div className="flex min-h-screen bg-slate-50/80 dark:bg-slate-950/80 transition-colors duration-300">
+        {/* 移动端遮罩 */}
+        {sidebarOpen && (
+          <div
+            className="fixed inset-0 bg-black/20 backdrop-blur-sm z-30 lg:hidden"
+            onClick={() => setSidebarOpen(false)}
+          />
+        )}
 
         {/* 侧边栏 */}
-        <aside className="w-56 shrink-0 sticky top-0 h-screen backdrop-blur-xl bg-white/60 dark:bg-slate-900/60 border-r border-white/20 dark:border-slate-700/20 flex flex-col">
-          <div className="px-5 py-5 border-b border-white/20 dark:border-slate-700/20">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl glass flex items-center justify-center shadow-lg animate-float">
-                <span className="text-2xl">🎯</span>
+        <aside className={`
+          fixed lg:sticky top-0 z-40 h-screen shrink-0
+          backdrop-blur-2xl bg-white/70 dark:bg-slate-900/70
+          border-r border-white/30 dark:border-slate-700/20
+          flex flex-col transition-all duration-300 lg:translate-x-0
+          ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
+          ${sidebarCollapsed ? 'w-16' : 'w-60'}
+        `}>
+          <div className={`py-5 border-b border-white/20 dark:border-slate-700/20 flex items-center ${sidebarCollapsed ? 'justify-center px-2' : 'px-5'}`}>
+            <div className={`flex items-center gap-3 ${sidebarCollapsed ? 'flex-col' : ''}`}>
+              <div className="w-10 h-10 rounded-2xl glass flex items-center justify-center shadow-glow animate-float shrink-0">
+                <LayoutGrid className="w-5 h-5 text-primary-500" />
               </div>
-              <div>
-                <span className="text-base font-bold text-indigo-900 dark:text-indigo-100">Token Plan</span>
-                <span className="block text-xs text-indigo-400 dark:text-indigo-500">{user?.username}</span>
-              </div>
+              {!sidebarCollapsed && (
+                <div>
+                  <span className="text-base font-bold text-slate-900 dark:text-slate-100">Token Plan</span>
+                  <span className="block text-xs text-slate-400">{user?.username}</span>
+                </div>
+              )}
             </div>
+            <button
+              onClick={() => setSidebarCollapsed(c => !c)}
+              className="hidden lg:flex ml-auto w-7 h-7 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors shrink-0"
+            >
+              {sidebarCollapsed
+                ? <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2 7h10M6 3l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                : <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M12 7H2M8 3L4 7l4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+              }
+            </button>
           </div>
 
-          <div className="flex-1 overflow-y-auto py-4 px-3">
+          <div className={`flex-1 overflow-y-auto py-4 ${sidebarCollapsed ? 'px-2' : 'px-3'}`}>
             <div className="space-y-1">
               <button
-                onClick={() => setSelectedGroupId(null)}
+                onClick={() => { setSelectedGroupId(null); setSidebarOpen(false); }}
                 className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
                   selectedGroupId === null
-                    ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/30'
-                    : 'text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/40'
-                }`}
+                    ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/30'
+                    : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/50'
+                } ${sidebarCollapsed ? 'justify-center' : ''}`}
+                title={sidebarCollapsed ? '全部账号' : undefined}
               >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
-                </svg>
-                全部
+                <LayoutGrid className="w-5 h-5 shrink-0" />
+                {!sidebarCollapsed && (
+                  <>
+                    <span className="flex-1 text-left truncate">全部账号</span>
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-bold ${
+                      selectedGroupId === null ? 'bg-white/20' : 'bg-slate-100 dark:bg-slate-800 text-slate-400'
+                    }`}>
+                      {accounts.length}
+                    </span>
+                  </>
+                )}
               </button>
 
-              {groups.map(group => (
-                <button
-                  key={group.id}
-                  onClick={() => setSelectedGroupId(group.id)}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all group ${
-                    selectedGroupId === group.id
-                      ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/30'
-                      : 'text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/40'
-                  }`}
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
-                  </svg>
-                  <span className="flex-1 text-left truncate">{group.name}</span>
-                </button>
-              ))}
+              {groups.map(group => {
+                const count = accounts.filter(a => a.groupId === group.id).length;
+                return (
+                  <button
+                    key={group.id}
+                    onClick={() => { setSelectedGroupId(group.id); setSidebarOpen(false); }}
+                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all group ${
+                      selectedGroupId === group.id
+                        ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/30'
+                        : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/50'
+                    } ${sidebarCollapsed ? 'justify-center' : ''}`}
+                    title={sidebarCollapsed ? group.name : undefined}
+                  >
+                    <Filter className="w-5 h-5 shrink-0" />
+                    {!sidebarCollapsed && (
+                      <>
+                        <span className="flex-1 text-left truncate">{group.name}</span>
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-bold ${
+                          selectedGroupId === group.id ? 'bg-white/20' : 'bg-slate-100 dark:bg-slate-800 text-slate-400'
+                        }`}>
+                          {count}
+                        </span>
+                      </>
+                    )}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
-          <div className="p-3 border-t border-white/20 dark:border-slate-700/20">
+          <div className={`p-3 border-t border-white/20 dark:border-slate-700/20 space-y-1 ${sidebarCollapsed ? 'px-2' : ''}`}>
             <button
               onClick={() => setShowGroupManager(true)}
-              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-all"
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/50 transition-all ${sidebarCollapsed ? 'justify-center' : ''}`}
+              title={sidebarCollapsed ? '管理分组' : undefined}
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
-              管理分组
+              <Settings className="w-5 h-5 shrink-0" />
+              {!sidebarCollapsed && <span>管理分组</span>}
             </button>
           </div>
         </aside>
 
         {/* 主内容区 */}
         <div className="flex-1 flex flex-col min-w-0">
-          <header className="sticky top-0 z-20 backdrop-blur-xl bg-white/60 dark:bg-slate-900/60 border-b border-white/20 dark:border-slate-700/20 shadow-sm">
-            <div className="px-5 h-16 flex items-center justify-end gap-2">
-              <button
-                onClick={() => setGlobalCollapsed(v => !v)}
-                className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-xl btn-glass shadow-sm transition-all ${
-                  globalCollapsed
-                    ? 'bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400'
-                    : 'text-indigo-600 dark:text-indigo-400'
-                }`}
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  {globalCollapsed ? (
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-                  ) : (
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h8M4 18h16" />
-                  )}
-                </svg>
-                {globalCollapsed ? '展开全部' : '折叠'}
-              </button>
+          {/* 顶部导航 */}
+          <header className="sticky top-0 z-20 backdrop-blur-2xl bg-white/60 dark:bg-slate-900/60 border-b border-white/30 dark:border-slate-700/20">
+            <div className="px-4 lg:px-6 h-16 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setSidebarOpen(true)}
+                  className="lg:hidden w-9 h-9 flex items-center justify-center rounded-xl glass text-slate-500"
+                >
+                  <LayoutGrid className="w-5 h-5" />
+                </button>
 
-              <button
-                onClick={() => void refreshAll()}
-                className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-xl btn-glass text-indigo-600 dark:text-indigo-400 shadow-sm"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
-                刷新全部
-              </button>
+              </div>
 
-              <button
-                onClick={toggleDarkMode}
-                className="w-9 h-9 flex items-center justify-center rounded-xl glass text-indigo-500 dark:text-indigo-400 transition-all hover:scale-105 btn-press"
-              >
-                {darkMode ? (
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
-                  </svg>
-                ) : (
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
-                  </svg>
-                )}
-              </button>
+              <div className="flex items-center gap-2">
+                {/* 排序 */}
+                <div className="relative hidden md:block">
+                  <select
+                    value={`${sortBy}-${sortOrder}`}
+                    onChange={e => {
+                      const [field, order] = e.target.value.split('-') as [SortBy, 'asc' | 'desc'];
+                      setSortBy(field);
+                      setSortOrder(order);
+                    }}
+                    className="appearance-none pl-3 pr-8 py-2 rounded-xl text-xs font-medium bg-slate-100/60 dark:bg-slate-800/60 border border-transparent focus:border-primary-300 dark:focus:border-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500/20 text-slate-600 dark:text-slate-300 cursor-pointer"
+                  >
+                    <option value="created-desc">最近添加</option>
+                    <option value="created-asc">最早添加</option>
+                    <option value="name-asc">名称 A-Z</option>
+                    <option value="name-desc">名称 Z-A</option>
+                    <option value="usage-desc">用量从高</option>
+                    <option value="usage-asc">用量从低</option>
+                  </select>
+                  <ArrowUpDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+                </div>
 
-              <button
-                onClick={logout}
-                className="w-9 h-9 flex items-center justify-center rounded-xl glass text-red-400 dark:text-red-500 transition-all hover:scale-105 btn-press"
-                title="退出登录"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                </svg>
-              </button>
+                <button
+                  onClick={() => void refreshAll()}
+                  className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-xl bg-slate-100/60 dark:bg-slate-800/60 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-all"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                  <span className="hidden sm:inline">刷新全部</span>
+                </button>
 
-              <button
-                onClick={() => setShowChangePassword(true)}
-                className="w-9 h-9 flex items-center justify-center rounded-xl glass text-amber-500 dark:text-amber-400 transition-all hover:scale-105 btn-press"
-                title="修改密码"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
-                </svg>
-              </button>
+                <button
+                  onClick={async () => {
+                    try {
+                      const { fetchTokenPlanRemains, fetchCreateSnapshot } = await import('./api');
+                      addToast('正在采集快照...', 'info');
+
+                      // 为每个账号采集数据
+                      const allSnapshots: Array<{
+                        account_id: string;
+                        model_name: string;
+                        weekly_usage: number;
+                        weekly_total: number;
+                        daily_usage: number;
+                        week_start: string;
+                      }> = [];
+
+                      for (const account of accounts) {
+                        try {
+                          const remains = await fetchTokenPlanRemains(account.apiKey);
+                          for (const model of remains) {
+                            // 只存 MiniMax-M* 的数据
+                            if (!/^MiniMax-M/i.test(model.model_name)) continue;
+                            // current_weekly_usage_count 实际上是剩余额度，已用量 = 总额 - 剩余
+                            const weeklyUsed = model.current_weekly_total_count - model.current_weekly_usage_count;
+                            // 使用 API 返回的 weekly_start_time 作为周起始
+                            const weekStart = model.weekly_start_time
+                              ? new Date(model.weekly_start_time).toISOString().split('T')[0]
+                              : '';
+                            allSnapshots.push({
+                              account_id: account.id,
+                              model_name: model.model_name,
+                              weekly_usage: weeklyUsed, // 存储已用量
+                              weekly_total: model.current_weekly_total_count,
+                              daily_usage: 0, // 后端会计算
+                              week_start: weekStart,
+                            });
+                          }
+                        } catch (e) {
+                          console.error(`[Snapshot] Failed to fetch for account ${account.id}:`, e);
+                        }
+                      }
+
+                      // 提交到后端
+                      await fetchCreateSnapshot(allSnapshots);
+                      addToast(`快照采集成功 (${allSnapshots.length} 条记录)`, 'success');
+                      window.location.reload();
+                    } catch {
+                      addToast('快照采集失败', 'error');
+                    }
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-xl bg-primary-50 dark:bg-primary-500/10 text-primary-600 dark:text-primary-400 hover:bg-primary-100 dark:hover:bg-primary-500/20 transition-all"
+                  title="采集每日用量快照"
+                >
+                  <Camera className="w-4 h-4" />
+                  <span className="hidden sm:inline">快照</span>
+                </button>
+
+                <button
+                  onClick={toggleDarkMode}
+                  className="w-9 h-9 flex items-center justify-center rounded-xl glass text-slate-500 dark:text-slate-300 transition-all hover:scale-105"
+                >
+                  {darkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+                </button>
+
+                <button
+                  onClick={() => setShowChangePassword(true)}
+                  className="w-9 h-9 flex items-center justify-center rounded-xl glass text-amber-500 dark:text-amber-400 transition-all hover:scale-105"
+                  title="修改密码"
+                >
+                  <KeyRound className="w-4 h-4" />
+                </button>
+
+                <button
+                  onClick={logout}
+                  className="w-9 h-9 flex items-center justify-center rounded-xl glass text-red-400 dark:text-red-500 transition-all hover:scale-105"
+                  title="退出登录"
+                >
+                  <LogOut className="w-4 h-4" />
+                </button>
+              </div>
             </div>
           </header>
 
-          <main className="flex-1 max-w-4xl w-full mx-auto px-5 py-8">
-            <div className="mb-6">
+          <main className="flex-1 max-w-6xl w-full mx-auto px-4 lg:px-6 py-6 space-y-6">
+            {/* 数据概览 */}
+            {!dbReady ? <SkeletonStats /> : (
+              <>
+                <DashboardStats statusMap={statusMap} groups={groups} selectedGroupId={selectedGroupId} />              </>
+            )}
+
+            {/* 图表 */}
+            {dbReady && (
+              <div className="animate-slide-down">
+                <UsageCharts statusMap={statusMap} viewMode={chartViewMode} onViewModeChange={setChartViewMode} />
+              </div>
+            )}
+
+            {/* 批量操作栏 */}
+            {filteredAccounts.length > 0 && (
+              <div className="flex flex-wrap items-center gap-2 animate-fade-in">
+                <button
+                  onClick={toggleSelectAll}
+                  className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-xl bg-slate-100/60 dark:bg-slate-800/60 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-all"
+                >
+                  {allSelected ? <CheckSquare className="w-4 h-4 text-primary-500" /> : <Square className="w-4 h-4" />}
+                  {allSelected ? '取消全选' : '全选'}
+                  {selectedIds.size > 0 && (
+                    <span className="ml-1 px-1.5 py-0.5 rounded-md bg-primary-100 dark:bg-primary-500/20 text-primary-600 dark:text-primary-400 text-[10px] font-bold">
+                      {selectedIds.size}
+                    </span>
+                  )}
+                </button>
+
+                {selectedIds.size > 0 && (
+                  <>
+                    <button
+                      onClick={() => void handleBatchRefresh()}
+                      className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-xl bg-primary-50 dark:bg-primary-500/10 text-primary-600 dark:text-primary-400 hover:bg-primary-100 dark:hover:bg-primary-500/20 transition-all"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" />
+                      批量刷新
+                    </button>
+                    <button
+                      onClick={() => setConfirmBatchDelete(true)}
+                      className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-xl bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-500/20 transition-all"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      批量删除
+                    </button>
+                  </>
+                )}
+
+                <div className="ml-auto flex items-center gap-2">
+                  <button
+                    onClick={() => handleExport('json')}
+                    className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-xl bg-slate-100/60 dark:bg-slate-800/60 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-all"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    JSON
+                  </button>
+                  <button
+                    onClick={() => handleExport('csv')}
+                    className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-xl bg-slate-100/60 dark:bg-slate-800/60 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-all"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    CSV
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* 添加账号按钮 */}
+            <div>
               {showAddForm ? (
-                <div className="glass rounded-3xl p-6 shadow-xl animate-scale-in">
+                <div className="glass-card rounded-3xl p-6 shadow-xl animate-scale-in">
                   <div className="flex items-center gap-3 mb-5">
-                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-400 to-purple-400 flex items-center justify-center text-white">
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                      </svg>
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary-400 to-violet-400 flex items-center justify-center text-white">
+                      <Plus className="w-5 h-5" />
                     </div>
-                    <h2 className="text-base font-semibold text-indigo-900 dark:text-indigo-100">添加新账号</h2>
+                    <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">添加新账号</h2>
                   </div>
                   <AccountForm
                     groups={groups}
@@ -271,61 +590,82 @@ export default function App() {
               ) : (
                 <button
                   onClick={() => setShowAddForm(true)}
-                  className="w-full py-4 rounded-2xl border-2 border-dashed border-indigo-300/50 dark:border-indigo-500/30 text-indigo-500 dark:text-indigo-400 hover:border-indigo-400 dark:hover:border-indigo-500 hover:bg-indigo-50/30 dark:hover:bg-indigo-500/10 transition-all flex items-center justify-center gap-2 text-sm font-medium"
+                  className="w-full py-4 rounded-2xl border-2 border-dashed border-slate-300/60 dark:border-slate-600/30 text-slate-500 dark:text-slate-400 hover:border-primary-400 dark:hover:border-primary-500 hover:bg-primary-50/30 dark:hover:bg-primary-500/5 transition-all flex items-center justify-center gap-2 text-sm font-medium"
                 >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                  </svg>
+                  <Plus className="w-5 h-5" />
                   添加账号
                 </button>
               )}
             </div>
 
-            {filteredAccounts.length === 0 ? (
-              <div className="glass rounded-3xl p-12 shadow-xl text-center animate-scale-in">
-                <div className="w-16 h-16 mx-auto mb-5 rounded-2xl glass flex items-center justify-center">
-                  <svg className="w-8 h-8 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-                  </svg>
-                </div>
-                <h3 className="text-lg font-semibold text-indigo-900 dark:text-indigo-100 mb-2">还没有添加账号</h3>
-                <p className="text-sm text-indigo-400 dark:text-indigo-500 mb-6 max-w-xs mx-auto">
-                  点击上方按钮添加你的 MiniMax API Key
-                </p>
+            {/* 搜索框 */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                placeholder="搜索账号..."
+                className="w-full pl-9 pr-10 py-2.5 rounded-xl text-sm bg-white/60 dark:bg-slate-800/60 border border-slate-200/50 dark:border-slate-700/50 focus:border-primary-300 dark:focus:border-primary-700 focus:bg-white dark:focus:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-primary-500/20 transition-all text-slate-700 dark:text-slate-200 placeholder:text-slate-400"
+              />
+              {searchQuery && (
                 <button
-                  onClick={() => setShowAddForm(true)}
-                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-500 text-white text-sm font-medium shadow-lg shadow-indigo-500/30 hover:shadow-xl hover:shadow-indigo-500/40 hover:-translate-y-0.5 transition-all btn-press"
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 p-0.5 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-400"
                 >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                  </svg>
-                  立即添加
+                  <X className="w-4 h-4" />
                 </button>
+              )}
+            </div>
+
+            {/* 账号列表 */}
+            {filteredAccounts.length === 0 ? (
+              <div className="glass-card rounded-3xl p-12 shadow-xl text-center animate-scale-in">
+                <div className="w-16 h-16 mx-auto mb-5 rounded-2xl glass flex items-center justify-center">
+                  <Search className="w-8 h-8 text-slate-300 dark:text-slate-600" />
+                </div>
+                <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-2">
+                  {accounts.length === 0 ? '还没有添加账号' : '没有找到匹配的账号'}
+                </h3>
+                <p className="text-sm text-slate-400 dark:text-slate-500 mb-6 max-w-xs mx-auto">
+                  {accounts.length === 0 ? '点击上方按钮添加你的 MiniMax API Key' : '尝试更换搜索关键词'}
+                </p>
+                {accounts.length === 0 && (
+                  <button
+                    onClick={() => setShowAddForm(true)}
+                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl btn-primary text-sm font-medium"
+                  >
+                    <Plus className="w-4 h-4" />
+                    立即添加
+                  </button>
+                )}
               </div>
             ) : (
-              <div className="space-y-5">
-                {filteredAccounts.map(account => {
+              <div className="space-y-4">
+                {filteredAccounts.map((account, idx) => {
                   const status = statusMap[account.id];
-                  if (!status) return null;
+                  if (!status && dbReady) return null;
                   return (
-                    <AccountCard
-                      key={account.id}
-                      status={status}
-                      globalCollapsed={globalCollapsed}
-                      confirmDelete={confirmDelete === account.id}
-                      groups={groups}
-                      onDelete={() => handleDelete(account.id)}
-                      onRefresh={() => void refreshAccount(account.id)}
-                      onEdit={() => setEditingAccount(account)}
-                    />
+                    <div key={account.id} className="animate-slide-up" style={{ animationDelay: `${idx * 60}ms` }}>
+                      <AccountCard
+                        status={status}
+                        globalCollapsed={globalCollapsed}
+                        groups={groups}
+                        selected={selectedIds.has(account.id)}
+                        onToggleSelect={() => toggleSelect(account.id)}
+                        onDelete={() => handleDeleteAccount(account.id)}
+                        onRefresh={() => { void refreshAccount(account.id); addToast('刷新成功', 'success'); }}
+                        onEdit={() => setEditingAccount(account)}
+                      />
+                    </div>
                   );
                 })}
               </div>
             )}
           </main>
 
-          <footer className="text-center py-8">
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full glass text-xs text-indigo-400 dark:text-indigo-500">
+          <footer className="text-center py-6">
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full glass text-xs text-slate-400 dark:text-slate-500">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
               数据每 60 秒自动刷新
             </div>
@@ -333,29 +673,26 @@ export default function App() {
         </div>
       </div>
 
+      {/* 编辑账号弹窗 */}
       {editingAccount && (
         <div
           className="fixed inset-0 bg-black/20 backdrop-blur-md flex items-center justify-center z-50 p-4 animate-fade-in"
           onClick={e => { if (e.target === e.currentTarget) setEditingAccount(null); }}
         >
-          <div className="glass rounded-3xl w-full max-w-sm shadow-2xl animate-scale-in">
+          <div className="glass-card rounded-3xl w-full max-w-sm shadow-2xl animate-scale-in">
             <div className="p-6">
               <div className="flex items-center justify-between mb-5">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-400 to-purple-400 flex items-center justify-center text-white">
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                    </svg>
+                    <Settings className="w-5 h-5" />
                   </div>
-                  <h2 className="text-base font-semibold text-indigo-900 dark:text-indigo-100">编辑账号</h2>
+                  <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">编辑账号</h2>
                 </div>
                 <button
                   onClick={() => setEditingAccount(null)}
-                  className="w-8 h-8 flex items-center justify-center rounded-xl glass text-indigo-400 hover:text-indigo-600 transition-colors"
+                  className="w-8 h-8 flex items-center justify-center rounded-xl glass text-slate-400 hover:text-slate-600 transition-colors"
                 >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
+                  <X className="w-5 h-5" />
                 </button>
               </div>
               <AccountForm
@@ -370,36 +707,46 @@ export default function App() {
         </div>
       )}
 
+      {/* 修改密码 */}
       {showChangePassword && (
         <ChangePasswordPage
           onClose={() => setShowChangePassword(false)}
-          onSuccess={() => {}}
+          onSuccess={() => addToast('密码修改成功', 'success')}
         />
       )}
 
+      {/* 批量删除确认 */}
+      {confirmBatchDelete && (
+        <ConfirmModal
+          title="确认批量删除"
+          message={`即将删除 ${selectedIds.size} 个账号，此操作不可恢复。确定继续吗？`}
+          confirmText="删除"
+          danger
+          onConfirm={() => void handleBatchDelete()}
+          onCancel={() => setConfirmBatchDelete(false)}
+        />
+      )}
+
+      {/* 分组管理 */}
       {showGroupManager && (
         <div
           className="fixed inset-0 bg-black/20 backdrop-blur-md flex items-center justify-center z-50 p-4 animate-fade-in"
           onClick={e => { if (e.target === e.currentTarget) setShowGroupManager(false); }}
         >
-          <div className="glass rounded-3xl w-full max-w-sm shadow-2xl animate-scale-in">
+          <div className="glass-card rounded-3xl w-full max-w-sm shadow-2xl animate-scale-in">
             <div className="p-6">
               <div className="flex items-center justify-between mb-5">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-400 to-purple-400 flex items-center justify-center text-white">
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
-                    </svg>
+                    <Settings className="w-5 h-5" />
                   </div>
-                  <h2 className="text-base font-semibold text-indigo-900 dark:text-indigo-100">管理分组</h2>
+                  <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">管理分组</h2>
                 </div>
                 <button
                   onClick={() => setShowGroupManager(false)}
-                  className="w-8 h-8 flex items-center justify-center rounded-xl glass text-indigo-400 hover:text-indigo-600 transition-colors"
+                  className="w-8 h-8 flex items-center justify-center rounded-xl glass text-slate-400 hover:text-slate-600 transition-colors"
                 >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
+                  <X className="w-5 h-5" />
                 </button>
               </div>
 
@@ -410,19 +757,19 @@ export default function App() {
                     value={newGroupName}
                     onChange={e => setNewGroupName(e.target.value)}
                     placeholder="分组名称"
-                    className="flex-1 px-3 py-2 rounded-xl text-sm border border-indigo-200/50 dark:border-indigo-700/50 bg-white/80 dark:bg-slate-800/80 text-indigo-900 dark:text-indigo-100 placeholder:text-transparent focus:outline-none focus:ring-2 focus:ring-indigo-500/30"
+                    className="flex-1 px-3 py-2 rounded-xl text-sm input-field"
                     autoFocus
                     onKeyDown={e => { if (e.key === 'Enter') void handleAddGroup(); }}
                   />
                   <button
                     onClick={() => void handleAddGroup()}
-                    className="px-4 py-2 text-sm rounded-xl bg-gradient-to-r from-indigo-500 to-purple-500 text-white font-medium"
+                    className="px-4 py-2 text-sm rounded-xl btn-primary"
                   >
                     添加
                   </button>
                   <button
                     onClick={() => { setShowAddGroup(false); setNewGroupName(''); }}
-                    className="px-4 py-2 text-sm rounded-xl border border-indigo-200/50 dark:border-indigo-700/50 text-indigo-500"
+                    className="px-4 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 text-slate-500"
                   >
                     取消
                   </button>
@@ -430,58 +777,54 @@ export default function App() {
               ) : (
                 <button
                   onClick={() => setShowAddGroup(true)}
-                  className="w-full mb-4 py-2 text-sm rounded-xl border-2 border-dashed border-indigo-300/50 dark:border-indigo-500/30 text-indigo-500 dark:text-indigo-400 hover:border-indigo-400 transition-all flex items-center justify-center gap-2"
+                  className="w-full mb-4 py-2 text-sm rounded-xl border-2 border-dashed border-slate-300/60 dark:border-slate-600/30 text-slate-500 dark:text-slate-400 hover:border-primary-400 transition-all flex items-center justify-center gap-2"
                 >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                  </svg>
+                  <Plus className="w-4 h-4" />
                   新建分组
                 </button>
               )}
 
               <div className="space-y-2 max-h-64 overflow-y-auto">
                 {groups.length === 0 ? (
-                  <p className="text-center text-sm text-indigo-400 dark:text-indigo-500 py-4">
-                    暂无分组
-                  </p>
+                  <p className="text-center text-sm text-slate-400 dark:text-slate-500 py-4">暂无分组</p>
                 ) : (
                   groups.map(group => (
-                    <div key={group.id} className="flex items-center gap-2 p-2 rounded-xl hover:bg-indigo-50/50 dark:hover:bg-indigo-900/20 group">
+                    <div key={group.id} className="flex items-center gap-2 p-2 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/30 group transition-colors">
                       {editingGroup?.id === group.id ? (
                         <>
                           <input
                             type="text"
                             value={newGroupName}
                             onChange={e => setNewGroupName(e.target.value)}
-                            className="flex-1 px-2 py-1 text-sm rounded-lg border border-indigo-200/50 dark:border-indigo-700/50 bg-white/80 dark:bg-slate-800/80 text-indigo-900 dark:text-indigo-100"
+                            className="flex-1 px-2 py-1 text-sm rounded-lg input-field"
                             autoFocus
                             onKeyDown={e => { if (e.key === 'Enter') void handleRenameGroup(); }}
                           />
                           <button
                             onClick={() => void handleRenameGroup()}
-                            className="text-xs text-emerald-500 hover:text-emerald-600"
+                            className="text-xs text-emerald-500 hover:text-emerald-600 font-medium"
                           >
                             保存
                           </button>
                           <button
                             onClick={() => { setEditingGroup(null); setNewGroupName(''); }}
-                            className="text-xs text-indigo-400 hover:text-indigo-600"
+                            className="text-xs text-slate-400 hover:text-slate-600"
                           >
                             取消
                           </button>
                         </>
                       ) : (
                         <>
-                          <span className="flex-1 text-sm text-indigo-900 dark:text-indigo-100 truncate">{group.name}</span>
+                          <span className="flex-1 text-sm text-slate-900 dark:text-slate-100 truncate">{group.name}</span>
                           <button
                             onClick={() => { setEditingGroup({ id: group.id, name: group.name }); setNewGroupName(group.name); }}
-                            className="opacity-0 group-hover:opacity-100 text-xs text-indigo-400 hover:text-indigo-600 transition-opacity"
+                            className="opacity-0 group-hover:opacity-100 text-xs text-slate-400 hover:text-primary-500 transition-opacity px-2 py-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"
                           >
                             重命名
                           </button>
                           <button
                             onClick={() => void handleDeleteGroup(group.id)}
-                            className="opacity-0 group-hover:opacity-100 text-xs text-red-400 hover:text-red-600 transition-opacity"
+                            className="opacity-0 group-hover:opacity-100 text-xs text-red-400 hover:text-red-600 transition-opacity px-2 py-1 rounded-lg hover:bg-red-50 dark:hover:bg-red-500/10"
                           >
                             删除
                           </button>

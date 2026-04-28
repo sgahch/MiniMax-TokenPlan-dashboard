@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { X, KeyRound, Lock, AlertCircle, ArrowRight } from 'lucide-react';
 
 interface ChangePasswordPageProps {
   onClose: () => void;
@@ -57,79 +58,92 @@ export function ChangePasswordPage({ onClose, onSuccess }: ChangePasswordPagePro
   };
 
   return (
-    <div className="fixed inset-0 bg-black/20 backdrop-blur-md flex items-center justify-center z-50 p-4">
-      <div className="glass rounded-3xl w-full max-w-sm shadow-2xl animate-scale-in">
+    <div className="fixed inset-0 bg-black/20 backdrop-blur-md flex items-center justify-center z-50 p-4 animate-fade-in">
+      <div className="glass-card rounded-3xl w-full max-w-sm shadow-2xl animate-scale-in">
         <div className="p-6">
           <div className="flex items-center justify-between mb-5">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-orange-400 flex items-center justify-center text-white">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
-                </svg>
+                <KeyRound className="w-5 h-5" />
               </div>
-              <h2 className="text-base font-semibold text-indigo-900 dark:text-indigo-100">修改密码</h2>
+              <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">修改密码</h2>
             </div>
             <button
               onClick={onClose}
-              className="w-8 h-8 flex items-center justify-center rounded-xl glass text-indigo-400 hover:text-indigo-600 transition-colors"
+              className="w-8 h-8 flex items-center justify-center rounded-xl glass text-slate-400 hover:text-slate-600 transition-colors"
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
+              <X className="w-5 h-5" />
             </button>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-xs font-medium text-indigo-500 mb-1.5">旧密码</label>
-              <input
-                type="password"
-                value={oldPassword}
-                onChange={e => setOldPassword(e.target.value)}
-                placeholder="请输入旧密码"
-                className="w-full px-4 py-3 rounded-xl text-sm border border-indigo-200/50 dark:border-indigo-700/50 bg-white/80 dark:bg-slate-800/80 text-indigo-900 dark:text-indigo-100 placeholder:text-indigo-300 dark:placeholder:text-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 transition-all"
-                required
-              />
+            <div className="relative">
+              <label className="block text-xs font-semibold text-primary-500 mb-1.5">旧密码</label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <input
+                  type="password"
+                  value={oldPassword}
+                  onChange={e => setOldPassword(e.target.value)}
+                  placeholder="请输入旧密码"
+                  className="w-full pl-9 pr-4 py-3 rounded-xl text-sm input-field"
+                  required
+                />
+              </div>
             </div>
 
-            <div>
-              <label className="block text-xs font-medium text-indigo-500 mb-1.5">新密码</label>
-              <input
-                type="password"
-                value={newPassword}
-                onChange={e => setNewPassword(e.target.value)}
-                placeholder="至少 6 位"
-                className="w-full px-4 py-3 rounded-xl text-sm border border-indigo-200/50 dark:border-indigo-700/50 bg-white/80 dark:bg-slate-800/80 text-indigo-900 dark:text-indigo-100 placeholder:text-indigo-300 dark:placeholder:text-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 transition-all"
-                required
-                minLength={6}
-              />
+            <div className="relative">
+              <label className="block text-xs font-semibold text-primary-500 mb-1.5">新密码</label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <input
+                  type="password"
+                  value={newPassword}
+                  onChange={e => setNewPassword(e.target.value)}
+                  placeholder="至少 6 位"
+                  className="w-full pl-9 pr-4 py-3 rounded-xl text-sm input-field"
+                  required
+                  minLength={6}
+                />
+              </div>
             </div>
 
-            <div>
-              <label className="block text-xs font-medium text-indigo-500 mb-1.5">确认新密码</label>
-              <input
-                type="password"
-                value={confirmPassword}
-                onChange={e => setConfirmPassword(e.target.value)}
-                placeholder="再次输入新密码"
-                className="w-full px-4 py-3 rounded-xl text-sm border border-indigo-200/50 dark:border-indigo-700/50 bg-white/80 dark:bg-slate-800/80 text-indigo-900 dark:text-indigo-100 placeholder:text-indigo-300 dark:placeholder:text-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 transition-all"
-                required
-                minLength={6}
-              />
+            <div className="relative">
+              <label className="block text-xs font-semibold text-primary-500 mb-1.5">确认新密码</label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <input
+                  type="password"
+                  value={confirmPassword}
+                  onChange={e => setConfirmPassword(e.target.value)}
+                  placeholder="再次输入新密码"
+                  className="w-full pl-9 pr-4 py-3 rounded-xl text-sm input-field"
+                  required
+                  minLength={6}
+                />
+              </div>
             </div>
 
             {error && (
-              <div className="p-3 rounded-xl bg-red-50/70 dark:bg-red-900/20 border border-red-200/40 dark:border-red-800/30">
-                <p className="text-xs text-red-500 text-center">{error}</p>
+              <div className="flex items-center gap-2 p-3 rounded-xl bg-red-50/70 dark:bg-red-500/5 border border-red-200/40 dark:border-red-500/10">
+                <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
+                <p className="text-xs text-red-500">{error}</p>
               </div>
             )}
 
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-3 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-white text-sm font-medium shadow-lg shadow-amber-500/30 hover:shadow-xl hover:shadow-amber-500/40 hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full py-3 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-white text-sm font-medium shadow-lg shadow-amber-500/30 hover:shadow-xl hover:shadow-amber-500/40 hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
-              {loading ? '修改中...' : '确认修改'}
+              {loading ? (
+                <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              ) : (
+                <>
+                  确认修改
+                  <ArrowRight className="w-4 h-4" />
+                </>
+              )}
             </button>
           </form>
         </div>
