@@ -35,10 +35,11 @@ export function useAccounts() {
       });
       if (!res.ok) throw new Error('获取账号失败');
       const data = await res.json();
-      const loadedAccounts: Account[] = data.map((row: { id: string; name: string; api_key: string }) => ({
+      const loadedAccounts: Account[] = data.map((row: { id: string; name: string; api_key: string; group_id?: string }) => ({
         id: row.id,
         name: row.name,
         apiKey: row.api_key,
+        groupId: row.group_id || null,
       }));
       setAccounts(loadedAccounts);
 
@@ -76,17 +77,17 @@ export function useAccounts() {
   }, []);
 
   // 添加账号
-  const addAccount = useCallback(async (name: string, apiKey: string) => {
+  const addAccount = useCallback(async (name: string, apiKey: string, groupId?: string | null) => {
     try {
       const res = await fetch(`${API_BASE}/accounts`, {
         method: 'POST',
         headers: getAuthHeaders(),
-        body: JSON.stringify({ name, api_key: apiKey }),
+        body: JSON.stringify({ name, api_key: apiKey, group_id: groupId }),
       });
       if (!res.ok) throw new Error('添加账号失败');
       const data = await res.json();
 
-      const newAccount: Account = { id: data.id, name: data.name, apiKey: data.api_key };
+      const newAccount: Account = { id: data.id, name: data.name, apiKey: data.api_key, groupId: data.group_id };
       console.log(`[Account] 添加账号 "${name}"（id: ${data.id}），即将拉取套餐数据...`);
       setAccounts(prev => [newAccount, ...prev]);
       setStatusMap(prev => ({
@@ -124,15 +125,15 @@ export function useAccounts() {
   }, []);
 
   // 更新账号
-  const updateAccount = useCallback(async (id: string, name: string, apiKey: string) => {
+  const updateAccount = useCallback(async (id: string, name: string, apiKey: string, groupId?: string | null) => {
     try {
       const res = await fetch(`${API_BASE}/accounts/${id}`, {
         method: 'PUT',
         headers: getAuthHeaders(),
-        body: JSON.stringify({ name, api_key: apiKey }),
+        body: JSON.stringify({ name, api_key: apiKey, group_id: groupId }),
       });
       if (!res.ok) throw new Error('更新账号失败');
-      setAccounts(prev => prev.map(a => a.id === id ? { ...a, name, apiKey } : a));
+      setAccounts(prev => prev.map(a => a.id === id ? { ...a, name, apiKey, groupId: groupId ?? null } : a));
     } catch (err) {
       console.error('[Account] 更新账号失败:', err);
       throw err;

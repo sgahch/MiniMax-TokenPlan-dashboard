@@ -1,21 +1,24 @@
 import { useState } from 'react';
-import type { Account } from './types';
+import type { Account, Group } from './types';
 
 interface AccountFormProps {
   initial?: Account;
-  onSubmit: (name: string, apiKey: string) => void;
+  groups: Group[];
+  selectedGroupId: string | null;
+  onSubmit: (name: string, apiKey: string, groupId: string | null) => void;
   onCancel: () => void;
 }
 
-export function AccountForm({ initial, onSubmit, onCancel }: AccountFormProps) {
+export function AccountForm({ initial, groups, selectedGroupId, onSubmit, onCancel }: AccountFormProps) {
   const [name, setName] = useState(initial?.name || '');
   const [apiKey, setApiKey] = useState(initial?.apiKey || '');
+  const [groupId, setGroupId] = useState<string | null>(initial?.groupId ?? selectedGroupId);
   const [focused, setFocused] = useState<string | null>(null);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim() || !apiKey.trim()) return;
-    onSubmit(name.trim(), apiKey.trim());
+    onSubmit(name.trim(), apiKey.trim(), groupId);
   };
 
   const isValid = name.trim() && apiKey.trim();
@@ -65,6 +68,29 @@ export function AccountForm({ initial, onSubmit, onCancel }: AccountFormProps) {
           placeholder="sk-xxxxxxxx"
           className="w-full px-3 py-2.5 rounded-xl text-sm border border-indigo-200/50 dark:border-indigo-700/50 bg-white/80 dark:bg-slate-800/80 text-indigo-900 dark:text-indigo-100 placeholder:text-transparent font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 dark:focus:border-indigo-500 transition-all"
         />
+      </div>
+
+      {/* 分组 */}
+      <div className="relative">
+        <label
+          className={`absolute left-3 transition-all duration-200 pointer-events-none ${
+            groupId !== null
+              ? '-top-2 text-[10px] px-1 bg-white dark:bg-slate-800 text-indigo-500 font-medium'
+              : 'top-3 text-xs text-indigo-400 dark:text-indigo-500'
+          }`}
+        >
+          分组（可选）
+        </label>
+        <select
+          value={groupId ?? ''}
+          onChange={e => setGroupId(e.target.value || null)}
+          className="w-full px-3 py-2.5 rounded-xl text-sm border border-indigo-200/50 dark:border-indigo-700/50 bg-white/80 dark:bg-slate-800/80 text-indigo-900 dark:text-indigo-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 dark:focus:border-indigo-500 transition-all appearance-none"
+        >
+          <option value="" disabled>选择分组</option>
+          {groups.map(group => (
+            <option key={group.id} value={group.id}>{group.name}</option>
+          ))}
+        </select>
       </div>
 
       {/* 按钮 */}

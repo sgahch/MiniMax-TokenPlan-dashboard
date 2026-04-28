@@ -3,3 +3,10 @@ dist
 .env
 *.log
 *.sql
+__pycache__/
+*.pyc
+.claude/
+.vscode/
+.idea/
+*.conf
+test.html

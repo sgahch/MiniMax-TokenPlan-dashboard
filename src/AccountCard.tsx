@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import type { AccountStatus } from './useAccounts';
+import type { Group } from './types';
 import { ModelCard } from './ModelCard';
 import { formatDuration } from './types';
 
@@ -7,6 +8,7 @@ interface AccountCardProps {
   status: AccountStatus;
   globalCollapsed: boolean;
   confirmDelete: boolean;
+  groups: Group[];
   onDelete: () => void;
   onRefresh: () => void;
   onEdit: () => void;
@@ -16,8 +18,9 @@ function isMiniMaxM(modelName: string) {
   return /^MiniMax-M/i.test(modelName);
 }
 
-export function AccountCard({ status, globalCollapsed, confirmDelete, onDelete, onRefresh, onEdit }: AccountCardProps) {
+export function AccountCard({ status, globalCollapsed, confirmDelete, groups, onDelete, onRefresh, onEdit }: AccountCardProps) {
   const { account, data, loading, error, lastFetched } = status;
+  const accountGroup = groups.find(g => g.id === account.groupId);
   const [collapsed, setCollapsed] = useState(false);
   const [copied, setCopied] = useState(false);
 
@@ -98,7 +101,14 @@ export function AccountCard({ status, globalCollapsed, confirmDelete, onDelete, 
               {account.name.charAt(0).toUpperCase()}
             </div>
             <div className="min-w-0">
-              <p className="text-sm font-semibold text-indigo-900 dark:text-indigo-100 truncate">{account.name}</p>
+              <div className="flex items-center gap-2">
+                <p className="text-sm font-semibold text-indigo-900 dark:text-indigo-100 truncate">{account.name}</p>
+                {accountGroup && (
+                  <span className="px-2 py-0.5 text-[10px] rounded-full bg-violet-100 dark:bg-violet-900/40 text-violet-600 dark:text-violet-400 font-medium shrink-0">
+                    {accountGroup.name}
+                  </span>
+                )}
+              </div>
               <button
                 onClick={copyApiKey}
                 className="group/api flex items-center gap-1.5 text-xs text-indigo-400 dark:text-indigo-500 font-mono truncate hover:text-indigo-600 dark:hover:text-indigo-300 transition-colors"

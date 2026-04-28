@@ -27,6 +27,14 @@ export interface Account {
   id: string;
   name: string;
   apiKey: string;
+  groupId?: string | null;
+}
+
+// 分组配置
+export interface Group {
+  id: string;
+  name: string;
+  created_at?: number;
 }
 
 // 格式化时间

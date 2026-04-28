@@ -74,16 +74,29 @@ def init_database():
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
             """)
 
-            # 创建账号表（添加 user_id）
+            # 创建分组表
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS `groups` (
+                    id VARCHAR(36) PRIMARY KEY,
+                    user_id VARCHAR(36) NOT NULL,
+                    name VARCHAR(100) NOT NULL,
+                    created_at BIGINT DEFAULT (UNIX_TIMESTAMP() * 1000),
+                    INDEX idx_user_id (user_id)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+            """)
+
+            # 创建账号表（添加 user_id, group_id）
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS accounts (
                     id VARCHAR(36) PRIMARY KEY,
                     user_id VARCHAR(36),
+                    group_id VARCHAR(36) DEFAULT NULL,
                     name VARCHAR(255) NOT NULL,
                     api_key VARCHAR(500) NOT NULL,
                     created_at BIGINT DEFAULT (UNIX_TIMESTAMP() * 1000),
                     INDEX idx_created_at (created_at),
-                    INDEX idx_user_id (user_id)
+                    INDEX idx_user_id (user_id),
+                    INDEX idx_group_id (group_id)
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
             """)
 
@@ -277,12 +290,19 @@ def change_password():
 @jwt_required
 def get_accounts():
     """获取当前用户的账号"""
+    group_id = request.args.get('group_id')
     with get_db() as cursor:
         if g.is_admin:
             # Admin 可以看所有账号
-            cursor.execute('SELECT id, name, api_key, created_at, user_id FROM accounts ORDER BY created_at DESC')
+            if group_id:
+                cursor.execute('SELECT id, name, api_key, created_at, user_id, group_id FROM accounts WHERE group_id = %s ORDER BY created_at DESC', (group_id,))
+            else:
+                cursor.execute('SELECT id, name, api_key, created_at, user_id, group_id FROM accounts ORDER BY created_at DESC')
         else:
-            cursor.execute('SELECT id, name, api_key, created_at, user_id FROM accounts WHERE user_id = %s ORDER BY created_at DESC', (g.user_id,))
+            if group_id:
+                cursor.execute('SELECT id, name, api_key, created_at, user_id, group_id FROM accounts WHERE user_id = %s AND group_id = %s ORDER BY created_at DESC', (g.user_id, group_id))
+            else:
+                cursor.execute('SELECT id, name, api_key, created_at, user_id, group_id FROM accounts WHERE user_id = %s ORDER BY created_at DESC', (g.user_id,))
         accounts = cursor.fetchall()
     return jsonify(accounts)
 
@@ -297,13 +317,14 @@ def add_account():
 
     account_id = str(uuid.uuid4())
     created_at = int(datetime.now().timestamp() * 1000)
+    group_id = data.get('group_id') or None
 
     with get_db() as cursor:
         cursor.execute(
-            'INSERT INTO accounts (id, user_id, name, api_key, created_at) VALUES (%s, %s, %s, %s, %s)',
-            (account_id, g.user_id, data['name'], data['api_key'], created_at)
+            'INSERT INTO accounts (id, user_id, group_id, name, api_key, created_at) VALUES (%s, %s, %s, %s, %s, %s)',
+            (account_id, g.user_id, group_id, data['name'], data['api_key'], created_at)
         )
-    return jsonify({'id': account_id, 'name': data['name'], 'api_key': data['api_key'], 'created_at': created_at, 'user_id': g.user_id}), 201
+    return jsonify({'id': account_id, 'name': data['name'], 'api_key': data['api_key'], 'created_at': created_at, 'user_id': g.user_id, 'group_id': group_id}), 201
 
 
 @app.route('/api/accounts/<account_id>', methods=['PUT'])
@@ -322,13 +343,14 @@ def update_account(account_id):
             if not account or account['user_id'] != g.user_id:
                 return jsonify({'error': '无权修改此账号'}), 403
 
+        group_id = data.get('group_id') or None
         cursor.execute(
-            'UPDATE accounts SET name = %s, api_key = %s WHERE id = %s',
-            (data['name'], data['api_key'], account_id)
+            'UPDATE accounts SET name = %s, api_key = %s, group_id = %s WHERE id = %s',
+            (data['name'], data['api_key'], group_id, account_id)
         )
         if cursor.rowcount == 0:
             return jsonify({'error': '账号不存在'}), 404
-    return jsonify({'id': account_id, 'name': data['name'], 'api_key': data['api_key']})
+    return jsonify({'id': account_id, 'name': data['name'], 'api_key': data['api_key'], 'group_id': group_id})
 
 
 @app.route('/api/accounts/<account_id>', methods=['DELETE'])
@@ -346,6 +368,85 @@ def delete_account(account_id):
         cursor.execute('DELETE FROM accounts WHERE id = %s', (account_id,))
         if cursor.rowcount == 0:
             return jsonify({'error': '账号不存在'}), 404
+    return jsonify({'success': True})
+
+
+# ============ 分组管理 API ============
+
+@app.route('/api/groups', methods=['GET'])
+@jwt_required
+def get_groups():
+    """获取当前用户的分组"""
+    with get_db() as cursor:
+        cursor.execute('SELECT id, name, created_at FROM `groups` WHERE user_id = %s ORDER BY created_at DESC', (g.user_id,))
+        groups = cursor.fetchall()
+    return jsonify(groups)
+
+
+@app.route('/api/groups', methods=['POST'])
+@jwt_required
+def create_group():
+    """创建分组"""
+    data = request.get_json()
+    if not data or not data.get('name'):
+        return jsonify({'error': 'name 必填'}), 400
+
+    name = data['name'].strip()
+    if len(name) < 1 or len(name) > 100:
+        return jsonify({'error': '分组名称长度需在 1-100 之间'}), 400
+
+    group_id = str(uuid.uuid4())
+    created_at = int(datetime.now().timestamp() * 1000)
+
+    with get_db() as cursor:
+        cursor.execute(
+            'INSERT INTO `groups` (id, user_id, name, created_at) VALUES (%s, %s, %s, %s)',
+            (group_id, g.user_id, name, created_at)
+        )
+    return jsonify({'id': group_id, 'name': name, 'created_at': created_at}), 201
+
+
+@app.route('/api/groups/<group_id>', methods=['PUT'])
+@jwt_required
+def update_group(group_id):
+    """更新分组(重命名)"""
+    data = request.get_json()
+    if not data or not data.get('name'):
+        return jsonify({'error': 'name 必填'}), 400
+
+    name = data['name'].strip()
+    if len(name) < 1 or len(name) > 100:
+        return jsonify({'error': '分组名称长度需在 1-100 之间'}), 400
+
+    with get_db() as cursor:
+        # 检查权限：自己的分组或者 admin
+        if not g.is_admin:
+            cursor.execute('SELECT user_id FROM `groups` WHERE id = %s', (group_id,))
+            group = cursor.fetchone()
+            if not group or group['user_id'] != g.user_id:
+                return jsonify({'error': '无权修改此分组'}), 403
+
+        cursor.execute('UPDATE `groups` SET name = %s WHERE id = %s', (name, group_id))
+        if cursor.rowcount == 0:
+            return jsonify({'error': '分组不存在'}), 404
+    return jsonify({'id': group_id, 'name': name})
+
+
+@app.route('/api/groups/<group_id>', methods=['DELETE'])
+@jwt_required
+def delete_group(group_id):
+    """删除分组"""
+    with get_db() as cursor:
+        # 检查权限：自己的分组或者 admin
+        if not g.is_admin:
+            cursor.execute('SELECT user_id FROM `groups` WHERE id = %s', (group_id,))
+            group = cursor.fetchone()
+            if not group or group['user_id'] != g.user_id:
+                return jsonify({'error': '无权删除此分组'}), 403
+
+        cursor.execute('DELETE FROM `groups` WHERE id = %s', (group_id,))
+        if cursor.rowcount == 0:
+            return jsonify({'error': '分组不存在'}), 404
     return jsonify({'success': True})
 
 

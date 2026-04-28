@@ -57,7 +57,7 @@ export function ModelCard({ data }: ModelCardProps) {
         <UsageBar percent={intervalStats.percent} />
         <div className="flex justify-between mt-1.5">
           <span className="text-xs text-indigo-300 dark:text-indigo-600">
-            剩余 {intervalStats.remaining.toLocaleString()}
+            已用 {(intervalStats.total-intervalStats.remaining).toLocaleString()}
           </span>
           <span className="text-xs text-indigo-400 dark:text-indigo-500">
             共 {intervalStats.total.toLocaleString()}
@@ -80,7 +80,7 @@ export function ModelCard({ data }: ModelCardProps) {
         <UsageBar percent={weeklyStats.percent} />
         <div className="flex justify-between mt-1.5">
           <span className="text-xs text-indigo-300 dark:text-indigo-600">
-            剩余 {weeklyStats.remaining.toLocaleString()}
+            已用 {(weeklyStats.total-weeklyStats.remaining).toLocaleString()}
           </span>
           <span className="text-xs text-indigo-400 dark:text-indigo-500">
             共 {weeklyStats.total.toLocaleString()}
