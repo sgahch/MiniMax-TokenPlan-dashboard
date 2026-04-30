@@ -55,6 +55,14 @@ export interface Group {
   created_at?: number;
 }
 
+// 拼车用户
+export interface ShareUser {
+  id: string;
+  account_id: string;
+  username: string;
+  created_at: number;
+}
+
 // 格式化时间
 export const formatDateTime = (timestamp: number): string => {
   if (!Number.isFinite(timestamp)) return "-";

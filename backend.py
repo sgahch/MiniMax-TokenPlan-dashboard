@@ -126,6 +126,19 @@ def init_database():
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
             """)
 
+            # 创建拼车用户表
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS account_share_users (
+                    id VARCHAR(36) PRIMARY KEY,
+                    account_id VARCHAR(36) NOT NULL,
+                    username VARCHAR(100) NOT NULL,
+                    created_at BIGINT DEFAULT (UNIX_TIMESTAMP() * 1000),
+                    INDEX idx_account_id (account_id),
+                    UNIQUE KEY uk_account_username (account_id, username),
+                    FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+            """)
+
         conn.commit()
         print("[DB] 数据库初始化完成")
     finally:
@@ -394,6 +407,89 @@ def delete_account(account_id):
         cursor.execute('DELETE FROM accounts WHERE id = %s', (account_id,))
         if cursor.rowcount == 0:
             return jsonify({'error': '账号不存在'}), 404
+    return jsonify({'success': True})
+
+
+# ============ 拼车管理 API ============
+
+@app.route('/api/accounts/<account_id>/share-users', methods=['GET'])
+@jwt_required
+def get_share_users(account_id):
+    """获取账号的拼车用户列表"""
+    with get_db() as cursor:
+        # 检查权限
+        if g.is_admin:
+            cursor.execute('SELECT user_id FROM accounts WHERE id = %s', (account_id,))
+        else:
+            cursor.execute('SELECT user_id FROM accounts WHERE id = %s AND user_id = %s', (account_id, g.user_id))
+        account = cursor.fetchone()
+        if not account:
+            return jsonify({'error': '账号不存在'}), 404
+
+        cursor.execute(
+            'SELECT id, account_id, username, created_at FROM account_share_users WHERE account_id = %s ORDER BY created_at DESC',
+            (account_id,)
+        )
+        users = cursor.fetchall()
+    return jsonify(users)
+
+
+@app.route('/api/accounts/<account_id>/share-users', methods=['POST'])
+@jwt_required
+def add_share_user(account_id):
+    """添加拼车用户"""
+    data = request.get_json()
+    if not data or not data.get('username'):
+        return jsonify({'error': 'username 必填'}), 400
+
+    username = data['username'].strip()
+    if len(username) < 1 or len(username) > 100:
+        return jsonify({'error': '用户名长度需在 1-100 之间'}), 400
+
+    with get_db() as cursor:
+        # 检查权限
+        if g.is_admin:
+            cursor.execute('SELECT user_id FROM accounts WHERE id = %s', (account_id,))
+        else:
+            cursor.execute('SELECT user_id FROM accounts WHERE id = %s AND user_id = %s', (account_id, g.user_id))
+        account = cursor.fetchone()
+        if not account:
+            return jsonify({'error': '账号不存在'}), 404
+
+        # 检查是否已存在
+        cursor.execute(
+            'SELECT id FROM account_share_users WHERE account_id = %s AND username = %s',
+            (account_id, username)
+        )
+        if cursor.fetchone():
+            return jsonify({'error': '该用户已在拼车列表中'}), 409
+
+        user_id = str(uuid.uuid4())
+        created_at = int(datetime.now().timestamp() * 1000)
+        cursor.execute(
+            'INSERT INTO account_share_users (id, account_id, username, created_at) VALUES (%s, %s, %s, %s)',
+            (user_id, account_id, username, created_at)
+        )
+    return jsonify({'id': user_id, 'account_id': account_id, 'username': username, 'created_at': created_at}), 201
+
+
+@app.route('/api/accounts/<account_id>/share-users/<user_id>', methods=['DELETE'])
+@jwt_required
+def remove_share_user(account_id, user_id):
+    """删除拼车用户"""
+    with get_db() as cursor:
+        # 检查权限
+        if g.is_admin:
+            cursor.execute('SELECT user_id FROM accounts WHERE id = %s', (account_id,))
+        else:
+            cursor.execute('SELECT user_id FROM accounts WHERE id = %s AND user_id = %s', (account_id, g.user_id))
+        account = cursor.fetchone()
+        if not account:
+            return jsonify({'error': '账号不存在'}), 404
+
+        cursor.execute('DELETE FROM account_share_users WHERE id = %s AND account_id = %s', (user_id, account_id))
+        if cursor.rowcount == 0:
+            return jsonify({'error': '拼车用户不存在'}), 404
     return jsonify({'success': True})
 
 

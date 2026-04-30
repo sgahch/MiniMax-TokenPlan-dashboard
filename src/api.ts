@@ -1,4 +1,4 @@
-import type { RemainsResponse, ModelRemain, DailyUsageResponse } from './types';
+import type { RemainsResponse, ModelRemain, DailyUsageResponse, ShareUser } from './types';
 
 const API_BASE = '/api';
 const DEFAULT_TIMEOUT = 120000;
@@ -150,4 +150,45 @@ export const fetchDailyUsageSummary = async (
   });
   if (!res.ok) throw new Error('获取每日用量汇总失败');
   return res.json();
+};
+
+// 获取拼车用户列表
+export const fetchShareUsers = async (accountId: string): Promise<ShareUser[]> => {
+  const token = localStorage.getItem('auth_token');
+  if (!token) throw new Error('未登录');
+
+  const res = await fetch(`${API_BASE}/accounts/${accountId}/share-users`, {
+    headers: getAuthHeaders(),
+  });
+  if (!res.ok) throw new Error('获取拼车用户失败');
+  return res.json();
+};
+
+// 添加拼车用户
+export const addShareUser = async (accountId: string, username: string): Promise<ShareUser> => {
+  const token = localStorage.getItem('auth_token');
+  if (!token) throw new Error('未登录');
+
+  const res = await fetch(`${API_BASE}/accounts/${accountId}/share-users`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ username }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || '添加拼车用户失败');
+  }
+  return res.json();
+};
+
+// 删除拼车用户
+export const removeShareUser = async (accountId: string, userId: string): Promise<void> => {
+  const token = localStorage.getItem('auth_token');
+  if (!token) throw new Error('未登录');
+
+  const res = await fetch(`${API_BASE}/accounts/${accountId}/share-users/${userId}`, {
+    method: 'DELETE',
+    headers: getAuthHeaders(),
+  });
+  if (!res.ok) throw new Error('删除拼车用户失败');
 };
